@@ -1,0 +1,93 @@
+{
+  "job_id": "job_1749676618802",
+  "title": "Redmi 13 5G, Orchid Pink, 6GB128GB  India Debut SD 4 Gen 2 AE  108MP Pro Grade Camera  6.79in Largest Display in Segment",
+  "price": null,
+  "images": [
+    "https://m.media-amazon.com/images/I/41Qk2Ca0TEL._SX300_SY300_QL70_FMwebp_.jpg"
+  ],
+  "script": {
+    "hook": "Are you ready to elevate your mobile experience?",
+    "pitch": "Meet the Redmi 13 5G in stunning Orchid Pink - where cutting-edge technology meets stunning design.",
+    "features": "Capture every moment with the 108MP Pro Grade Camera and enjoy the seamless performance of the Snapdragon 4 Gen 2. With a massive 6.79-inch display, your content comes to life like never before!",
+    "cta": "Don\u2019t miss out! Get your Redmi 13 5G today and experience the future of smartphones!",
+    "visual_cues": [
+      "Scene 1: Product showcase with a slow zoom on the Orchid Pink color.",
+      "Scene 2: Feature demonstration of the camera capturing vibrant photos.",
+      "Scene 3: Happy customer using the phone in various scenarios.",
+      "Scene 4: Strong CTA with the product displayed prominently and a limited-time offer."
+    ],
+    "word_count": 90,
+    "key_messages": [
+      "Elevate your mobile experience",
+      "Capture every moment with stunning clarity",
+      "Experience the future of smartphones today"
+    ],
+    "metadata": {
+      "product_title": "Redmi 13 5G, Orchid Pink, 6GB128GB  India Debut SD 4 Gen 2 AE  108MP Pro Grade Camera  6.79in Largest Display in Segment",
+      "style": "energetic",
+      "duration": 30,
+      "generated_at": 1749676623.500413,
+      "category": "electronics",
+      "price_point": "",
+      "target_audience": "tech enthusiasts and professionals"
+    },
+    "production_notes": {
+      "recommended_music": "upbeat electronic or pop",
+      "color_mood": "bright and vibrant",
+      "pacing": "moderate with clear sections",
+      "visual_style": "dynamic with quick cuts"
+    }
+  },
+  "style": "energetic",
+  "duration": 30,
+  "generated_at": 1749676623.500413,
+  "video_metadata": {
+    "color_scheme": {
+      "primary": "#FF6F91",
+      "secondary": "#FF9F9D",
+      "accent": "#6E7BFF",
+      "background": "#F3F4F6"
+    },
+    "typography": {
+      "primary_font": "Montserrat",
+      "secondary_font": "Roboto",
+      "font_weight": "bold"
+    },
+    "animations": [
+      "fade_in",
+      "slide_up",
+      "zoom_in",
+      "bounce"
+    ],
+    "music_style": "upbeat",
+    "visual_effects": [
+      "particle_effects",
+      "gradient_overlays",
+      "product_highlights"
+    ],
+    "layout_suggestions": {
+      "product_position": "center",
+      "text_alignment": "center",
+      "logo_placement": "top_right"
+    }
+  },
+  "product_analysis": {
+    "target_audience": "young adults and tech-savvy individuals looking for a feature-rich smartphone at an affordable price",
+    "emotional_triggers": [
+      "excitement about the latest technology",
+      "desire for high-quality photography",
+      "need for a reliable and stylish device"
+    ],
+    "value_proposition": "A powerful smartphone with a stunning 108MP camera and the largest display in its segment, offering great performance and features at an affordable price.",
+    "competitive_advantage": "Combination of high-end camera capabilities, a large display, and advanced features like 5G connectivity and fast charging, all in a stylish design.",
+    "urgency_factors": [
+      "limited-time launch offers",
+      "exclusive color availability"
+    ],
+    "trust_signals": [
+      "Xiaomi's established brand reputation",
+      "positive customer reviews and testimonials"
+    ],
+    "recommended_tone": "energetic"
+  }
+}

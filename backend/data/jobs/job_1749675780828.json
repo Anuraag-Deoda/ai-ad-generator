@@ -1,0 +1,93 @@
+{
+  "job_id": "job_1749675780828",
+  "title": "Redmi 13 5G, Hawaiian Blue, 8GB128GB  India Debut SD 4 Gen 2 AE  108MP Pro Grade Camera  6.79in Largest Display in Segment",
+  "price": "\u20b917900",
+  "images": [
+    "https://m.media-amazon.com/images/I/41lcslzhM-L._SX300_SY300_QL70_FMwebp_.jpg"
+  ],
+  "script": {
+    "hook": "Unleash your creativity with the Redmi 13 5G \u2013 where innovation meets style!",
+    "pitch": "Experience photography like never before with the 108MP Pro Grade Camera that transforms every shot into a masterpiece.",
+    "features": "Capture stunning moments in any light with Night Mode and 3X In-Sensor Zoom. Plus, enjoy a massive 6.79-inch display that makes every detail pop!",
+    "cta": "Don't miss out! Grab your Redmi 13 5G today for just \u20b917900 and redefine what's possible!",
+    "visual_cues": [
+      "Scene 1: Product showcase with vibrant colors and Hawaiian Blue design",
+      "Scene 2: Feature demonstration of camera in action with stunning photos",
+      "Scene 3: Happy customer using the phone in various settings",
+      "Scene 4: Strong CTA with the product on display and price highlighted"
+    ],
+    "word_count": 90,
+    "key_messages": [
+      "Innovative Camera Technology",
+      "Massive Display for Immersive Experience",
+      "Grab Yours Today!"
+    ],
+    "metadata": {
+      "product_title": "Redmi 13 5G, Hawaiian Blue, 8GB128GB  India Debut SD 4 Gen 2 AE  108MP Pro Grade Camera  6.79in Largest Display in Segment",
+      "style": "energetic",
+      "duration": 30,
+      "generated_at": 1749675785.8244035,
+      "category": "electronics",
+      "price_point": "(premium)",
+      "target_audience": "tech enthusiasts and professionals"
+    },
+    "production_notes": {
+      "recommended_music": "upbeat electronic or pop",
+      "color_mood": "bright and vibrant",
+      "pacing": "moderate with clear sections",
+      "visual_style": "dynamic with quick cuts"
+    }
+  },
+  "style": "energetic",
+  "duration": 30,
+  "generated_at": 1749675785.8254056,
+  "video_metadata": {
+    "color_scheme": {
+      "primary": "#00BFFF",
+      "secondary": "#FFFFFF",
+      "accent": "#FF4500",
+      "background": "#F0F8FF"
+    },
+    "typography": {
+      "primary_font": "Montserrat",
+      "secondary_font": "Roboto",
+      "font_weight": "bold"
+    },
+    "animations": [
+      "fade_in",
+      "zoom_in",
+      "slide_up",
+      "bounce"
+    ],
+    "music_style": "upbeat",
+    "visual_effects": [
+      "particle_effects",
+      "product_highlights",
+      "gradient_overlays"
+    ],
+    "layout_suggestions": {
+      "product_position": "center",
+      "text_alignment": "center",
+      "logo_placement": "top_right"
+    }
+  },
+  "product_analysis": {
+    "target_audience": "Young professionals and tech-savvy individuals aged 18-35 in urban areas",
+    "emotional_triggers": [
+      "Desire for cutting-edge technology",
+      "Pride in owning a high-quality camera",
+      "Need for a reliable device for everyday use"
+    ],
+    "value_proposition": "Experience premium features and superior performance at an affordable price",
+    "competitive_advantage": "108MP Pro Grade Camera and the largest display in its segment combined with high-performance processor and fast charging",
+    "urgency_factors": [
+      "Limited-time launch offer",
+      "Exclusive discounts for early buyers"
+    ],
+    "trust_signals": [
+      "Positive customer reviews",
+      "Xiaomi's established brand reputation"
+    ],
+    "recommended_tone": "energetic"
+  }
+}

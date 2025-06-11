@@ -1,0 +1,93 @@
+{
+  "job_id": "job_1749676582117",
+  "title": "Redmi 13 5G, Orchid Pink, 6GB128GB  India Debut SD 4 Gen 2 AE  108MP Pro Grade Camera  6.79in Largest Display in Segment",
+  "price": null,
+  "images": [
+    "https://m.media-amazon.com/images/I/41Qk2Ca0TEL._SX300_SY300_QL70_FMwebp_.jpg"
+  ],
+  "script": {
+    "hook": "Unleash the power of the incredible Redmi 13 5G \u2013 where innovation meets style!",
+    "pitch": "With its stunning 108MP Pro Grade Camera and the largest 6.79-inch display in its segment, capture every moment in breathtaking detail.",
+    "features": "Experience lightning-fast performance with the Snapdragon 4 Gen 2 processor, and enjoy a vibrant 120Hz Adaptive Sync display. Perfect for tech enthusiasts who crave cutting-edge technology!",
+    "cta": "Don't miss out! Grab your Redmi 13 5G today and elevate your mobile experience!",
+    "visual_cues": [
+      "Scene 1: Product showcase with dynamic lighting",
+      "Scene 2: Close-up of camera capturing vibrant images",
+      "Scene 3: Excited customer using the phone in everyday life",
+      "Scene 4: Strong CTA with product in hand, animated price tag"
+    ],
+    "word_count": 90,
+    "key_messages": [
+      "Unleash your creativity",
+      "Experience cutting-edge technology",
+      "Elevate your mobile experience"
+    ],
+    "metadata": {
+      "product_title": "Redmi 13 5G, Orchid Pink, 6GB128GB  India Debut SD 4 Gen 2 AE  108MP Pro Grade Camera  6.79in Largest Display in Segment",
+      "style": "energetic",
+      "duration": 30,
+      "generated_at": 1749676588.2322857,
+      "category": "electronics",
+      "price_point": "",
+      "target_audience": "tech enthusiasts and professionals"
+    },
+    "production_notes": {
+      "recommended_music": "upbeat electronic or pop",
+      "color_mood": "bright and vibrant",
+      "pacing": "moderate with clear sections",
+      "visual_style": "dynamic with quick cuts"
+    }
+  },
+  "style": "energetic",
+  "duration": 30,
+  "generated_at": 1749676588.2322857,
+  "video_metadata": {
+    "color_scheme": {
+      "primary": "#FF6F61",
+      "secondary": "#FFC107",
+      "accent": "#FFFFFF",
+      "background": "#F5F5F5"
+    },
+    "typography": {
+      "primary_font": "Roboto",
+      "secondary_font": "Montserrat",
+      "font_weight": "bold"
+    },
+    "animations": [
+      "fade_in",
+      "slide_up",
+      "zoom_in",
+      "bounce"
+    ],
+    "music_style": "upbeat",
+    "visual_effects": [
+      "particle_effects",
+      "gradient_overlays",
+      "product_highlights"
+    ],
+    "layout_suggestions": {
+      "product_position": "center",
+      "text_alignment": "center",
+      "logo_placement": "top_right"
+    }
+  },
+  "product_analysis": {
+    "target_audience": "Young professionals and tech-savvy individuals aged 18-35 in India",
+    "emotional_triggers": [
+      "Desire for high-quality photography",
+      "Need for cutting-edge technology",
+      "Aspiration for stylish design"
+    ],
+    "value_proposition": "Experience flagship features at an affordable price with the Redmi 13 5G.",
+    "competitive_advantage": "108MP Pro Grade Camera with advanced features and the largest display in its segment.",
+    "urgency_factors": [
+      "Limited-time launch offers",
+      "Exclusive online discounts"
+    ],
+    "trust_signals": [
+      "Positive reviews from tech influencers",
+      "Brand reputation of Xiaomi"
+    ],
+    "recommended_tone": "energetic"
+  }
+}

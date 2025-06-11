@@ -1,8 +1,16 @@
-from flask import Flask, request, jsonify
+import shutil
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import validators
 import logging
 import time
+import math
+import cv2
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
+import requests
+from io import BytesIO
+import textwrap
 import uuid
 import os
 import json
@@ -158,8 +166,8 @@ def generate_content():
                 output["product_analysis"] = {}
 
         # Save to file for Remotion
-        os.makedirs("remotion/input", exist_ok=True)
-        with open(f"remotion/input/{job_id}.json", "w") as f:
+        os.makedirs("data/jobs", exist_ok=True)
+        with open(f"data/jobs/{job_id}.json", "w") as f:
             json.dump(output, f, indent=2)
 
         logger.info(f"Successfully generated content for: {product.get('title', 'Unknown')[:50]}")
@@ -302,50 +310,476 @@ def get_batch_status(batch_id):
         return jsonify({'error': 'Failed to get batch status'}), 500
 
 
-@app.route('/api/generate-video-batch', methods=['POST'])
-def generate_video_batch():
-    """Generate videos for all jobs in a batch"""
+
+
+# Add this new function to replace Remotion video generation
+@app.route('/api/generate-video', methods=['POST'])
+def generate_video():
+    """Generate video using FFmpeg and OpenCV"""
     try:
         data = request.get_json()
-        batch_id = data.get('batch_id')
-        
-        if not batch_id:
-            return jsonify({'error': 'batch_id required'}), 400
+        job_id = data.get('job_id')
+        if not job_id:
+            return jsonify({'error': 'job_id required'}), 400
+ 
+        input_path = f"data/jobs/{job_id}.json"
+        if not os.path.exists(input_path):
+            return jsonify({'error': 'Job not found'}), 404
+ 
+        with open(input_path, 'r') as f:
+            job_data = json.load(f)
+ 
+        # Generate video using FFmpeg
+        video_path = generate_ffmpeg_video(job_data)
+ 
+        if video_path:
+            return jsonify({
+                "success": True, 
+                "video_path": video_path,
+                "job_id": job_id
+            }), 200
+        else:
+            return jsonify({'error': 'Video generation failed'}), 500
+ 
+    except Exception as e:
+        logger.error(f"Error in generate_video: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+ 
+ 
+def generate_ffmpeg_video(job_data):
+    """Generate video using OpenCV and convert to web-compatible format"""
+    try:
+        job_id = job_data.get('job_id')
+        script = job_data.get('script', {})
+        product_images = job_data.get('images', [])
+        duration = job_data.get('duration', 30)
+        product_title = job_data.get('title', 'Amazing Product')
 
-        batch_path = f"remotion/input/batch_{batch_id}.json"
+        # Prepare output paths
+        os.makedirs("static/videos", exist_ok=True)
+        temp_path = f"static/videos/{job_id}_temp.mp4"
+        final_path = f"static/videos/{job_id}.mp4"
+
+        # Video parameters
+        width, height = 1080, 1920
+        fps = 30
+        total_frames = duration * fps
+
+        # Use browser-safe codec
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        video_writer = cv2.VideoWriter(temp_path, fourcc, fps, (width, height))
+
+        if not video_writer.isOpened():
+            logger.error("❌ Failed to open VideoWriter. Check codec or file path.")
+            return None
+
+        # Load up to 3 product images
+        images = []
+        for img_url in product_images[:3]:
+            try:
+                response = requests.get(img_url, timeout=10, headers={
+                    'User-Agent': 'Mozilla/5.0'
+                })
+                img = Image.open(BytesIO(response.content)).convert('RGB')
+                img = img.resize((800, 800), Image.Resampling.LANCZOS)
+                images.append(img)
+                logger.info(f"✅ Loaded image: {img_url[:50]}...")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to load image {img_url}: {str(e)}")
+
+        if not images:
+            images.append(create_placeholder_image(product_title))
+
+        logger.info(f"🎬 Generating {total_frames} frames for {duration}s video...")
+
+        for frame_num in range(total_frames):
+            if frame_num % 150 == 0:
+                logger.info(f"🧩 {frame_num}/{total_frames} frames done ({frame_num/total_frames:.0%})")
+
+            frame = create_animated_frame(script, images, frame_num, total_frames, width, height, job_data)
+            frame_np = np.array(frame)
+            frame_cv2 = cv2.cvtColor(frame_np, cv2.COLOR_RGB2BGR)
+            video_writer.write(frame_cv2)
+
+        video_writer.release()
+        cv2.destroyAllWindows()
+
+        if not os.path.exists(temp_path):
+            logger.error("❌ Temp video not created by OpenCV.")
+            return None
+
+        success = convert_to_web_format(temp_path, final_path)
+
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+        if success and os.path.exists(final_path):
+            logger.info(f"✅ Final video generated: {final_path}")
+            return f"/static/videos/{job_id}.mp4"
+        else:
+            logger.error("❌ Final video conversion failed.")
+            return None
+
+    except Exception as e:
+        logger.error(f"🔥 Exception in video generation: {str(e)}")
+        return None
+
+
+def convert_to_web_format(input_path, output_path):
+    try:
+        cmd = [
+            'ffmpeg', '-y',
+            '-i', input_path,
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-c:a', 'aac',
+            '-movflags', '+faststart',
+            '-pix_fmt', 'yuv420p',
+            '-shortest',
+            output_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            logger.error(f"FFmpeg error:\n{result.stderr}")
+            return False
+        return True
+    except Exception as e:
+        logger.error(f"FFmpeg conversion failed: {str(e)}")
+        return False
+
+
+def create_placeholder_image(title):
+    """Create a placeholder product image"""
+    img = Image.new('RGB', (800, 800), color=(45, 45, 45))
+    draw = ImageDraw.Draw(img)
+ 
+    try:
+        font = ImageFont.truetype("arial.ttf", 60)
+    except:
+        font = ImageFont.load_default()
+ 
+    # Add gradient background
+    for y in range(800):
+        color_val = int(45 + (y / 800) * 40)
+        draw.line([(0, y), (800, y)], fill=(color_val, color_val, color_val))
+ 
+    # Add text
+    wrapped_title = textwrap.fill(title, width=20)
+    bbox = draw.multiline_textbbox((0, 0), wrapped_title, font=font)
+    text_width = bbox[2] - bbox[0]
+    text_height = bbox[3] - bbox[1]
+ 
+    x = (800 - text_width) // 2
+    y = (800 - text_height) // 2
+ 
+    draw.multiline_text((x, y), wrapped_title, fill=(255, 255, 255), font=font, align='center')
+ 
+    return img
+ 
+ 
+def create_animated_frame(script, images, frame_num, total_frames, width, height, job_data):
+    """Create individual animated frame"""
+    # Calculate progress (0.0 to 1.0)
+    progress = frame_num / total_frames
+ 
+    # Determine current scene
+    scene_info = get_current_scene(progress, script)
+ 
+    # Create base frame with gradient background
+    frame = create_gradient_background(width, height, scene_info['type'])
+ 
+    # Add animated product image
+    add_animated_product_image(frame, images, scene_info, frame_num, width, height)
+ 
+    # Add animated text with proper sizing and effects
+    add_animated_text(frame, scene_info, frame_num, width, height)
+ 
+    # Add scene-specific effects
+    add_advanced_effects(frame, scene_info, frame_num, width, height)
+ 
+    return frame
+ 
+ 
+def get_current_scene(progress, script):
+    """Determine current scene based on progress"""
+    if progress < 0.2:
+        return {
+            'type': 'hook',
+            'text': script.get('hook', 'Amazing Product Alert! 🚨'),
+            'progress': progress / 0.2,
+            'color': (255, 215, 0)  # Gold
+        }
+    elif progress < 0.5:
+        return {
+            'type': 'pitch',
+            'text': script.get('pitch', 'This product will change your life!'),
+            'progress': (progress - 0.2) / 0.3,
+            'color': (255, 255, 255)  # White
+        }
+    elif progress < 0.8:
+        return {
+            'type': 'features',
+            'text': script.get('features', 'Premium quality, amazing features!'),
+            'progress': (progress - 0.5) / 0.3,
+            'color': (100, 255, 100)  # Green
+        }
+    else:
+        return {
+            'type': 'cta',
+            'text': script.get('cta', 'Get Yours Now! Limited Time! 🔥'),
+            'progress': (progress - 0.8) / 0.2,
+            'color': (255, 100, 100)  # Red
+        }
+ 
+ 
+def create_gradient_background(width, height, scene_type):
+    """Create animated gradient background"""
+    img = Image.new('RGB', (width, height))
+    draw = ImageDraw.Draw(img)
+ 
+    # Scene-specific gradients
+    gradients = {
+        'hook': [(20, 20, 40), (40, 20, 60)],      # Dark blue
+        'pitch': [(40, 40, 40), (20, 20, 20)],     # Dark gray
+        'features': [(20, 40, 20), (40, 60, 40)],  # Dark green
+        'cta': [(60, 20, 20), (40, 20, 40)]        # Dark red
+    }
+ 
+    colors = gradients.get(scene_type, gradients['pitch'])
+ 
+    # Create vertical gradient
+    for y in range(height):
+        ratio = y / height
+        r = int(colors[0][0] * (1 - ratio) + colors[1][0] * ratio)
+        g = int(colors[0][1] * (1 - ratio) + colors[1][1] * ratio)
+        b = int(colors[0][2] * (1 - ratio) + colors[1][2] * ratio)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+ 
+    return img
+ 
+ 
+def add_animated_product_image(frame, images, scene_info, frame_num, width, height):
+    """Add animated product image"""
+    if not images:
+        return
+ 
+    img = images[0]  # Use first image
+    scene_progress = scene_info['progress']
+ 
+    # Image size animation
+    base_size = 600
+    if scene_info['type'] == 'hook':
+        # Zoom in effect
+        scale = 0.8 + (scene_progress * 0.4)  # 0.8 to 1.2
+    elif scene_info['type'] == 'cta':
+        # Pulsing effect
+        pulse = math.sin(frame_num * 0.3) * 0.1
+        scale = 1.0 + pulse
+    else:
+        scale = 1.0
+ 
+    # Resize image
+    new_size = int(base_size * scale)
+    img_resized = img.resize((new_size, new_size), Image.Resampling.LANCZOS)
+ 
+    # Position (upper part of frame)
+    img_x = (width - new_size) // 2
+    img_y = 150 + int(math.sin(frame_num * 0.1) * 10)  # Subtle floating effect
+ 
+    # Add shadow effect
+    shadow = Image.new('RGBA', (new_size + 20, new_size + 20), (0, 0, 0, 80))
+    frame.paste(shadow, (img_x + 10, img_y + 10), shadow)
+ 
+    # Paste main image
+    if img_resized.mode != 'RGBA':
+        img_resized = img_resized.convert('RGBA')
+    frame.paste(img_resized, (img_x, img_y), img_resized)
+ 
+ 
+def add_animated_text(frame, scene_info, frame_num, width, height):
+    """Add animated text with proper readability"""
+    draw = ImageDraw.Draw(frame)
+    text = scene_info['text']
+ 
+    if not text:
+        return
+ 
+    # Font sizing based on scene
+    font_sizes = {
+        'hook': 64,
+        'pitch': 48,
+        'features': 44,
+        'cta': 56
+    }
+ 
+    try:
+        font_size = font_sizes.get(scene_info['type'], 48)
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except:
+        # Fallback for systems without arial.ttf
+        try:
+            font = ImageFont.truetype("/System/Library/Fonts/Arial.ttf", font_size)
+        except:
+            font = ImageFont.load_default()
+ 
+    # Text wrapping
+    max_chars = 30 if scene_info['type'] == 'hook' else 40
+    wrapped_text = textwrap.fill(text, width=max_chars)
+ 
+    # Text position (lower third)
+    text_y_base = height - 500
+ 
+    # Animation effects
+    scene_progress = scene_info['progress']
+ 
+    if scene_info['type'] == 'hook':
+        # Slide up effect
+        offset_y = int((1 - scene_progress) * 100)
+        alpha = int(scene_progress * 255)
+    elif scene_info['type'] == 'cta':
+        # Pulsing effect
+        pulse = math.sin(frame_num * 0.4) * 0.2 + 1.0
+        alpha = 255
+        offset_y = 0
+    else:
+        # Fade in effect
+        alpha = min(255, int(scene_progress * 300))
+        offset_y = 0
+ 
+    # Draw each line with effects
+    lines = wrapped_text.split('\n')
+    current_y = text_y_base + offset_y
+ 
+    for i, line in enumerate(lines):
+        if not line.strip():
+            continue
+ 
+        # Get text dimensions
+        bbox = draw.textbbox((0, 0), line, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+ 
+        # Center horizontally
+        text_x = (width - text_width) // 2
+ 
+        # Add multiple shadow layers for better readability
+        shadow_offsets = [(4, 4), (2, 2), (6, 6)]
+        shadow_colors = [(0, 0, 0), (0, 0, 0), (0, 0, 0, 100)]
+        shadow_alphas = [200, 150, 100]
+ 
+        for j, (sx, sy) in enumerate(shadow_offsets):
+            shadow_alpha = min(255, int(shadow_alphas[j] * (alpha / 255)))
+            shadow_color = (*shadow_colors[j][:3], shadow_alpha)
+ 
+            # Create shadow layer
+            shadow_img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+            shadow_draw = ImageDraw.Draw(shadow_img)
+            shadow_draw.text((text_x + sx, current_y + sy), line, 
+                           fill=(0, 0, 0, shadow_alpha), font=font)
+            frame.paste(shadow_img, (0, 0), shadow_img)
+ 
+        # Main text with scene color
+        text_color = (*scene_info['color'], alpha)
+        text_img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        text_draw = ImageDraw.Draw(text_img)
+        text_draw.text((text_x, current_y), line, fill=text_color, font=font)
+        frame.paste(text_img, (0, 0), text_img)
+ 
+        current_y += text_height + 15
+ 
+ 
+def add_advanced_effects(frame, scene_info, frame_num, width, height):
+    """Add advanced visual effects"""
+    draw = ImageDraw.Draw(frame)
+ 
+    if scene_info['type'] == 'hook':
+        # Add attention-grabbing borders
+        border_width = int(10 + math.sin(frame_num * 0.5) * 5)
+        color = (255, 215, 0, 150)  # Gold with transparency
+ 
+        # Top and bottom borders
+        for i in range(border_width):
+            alpha = int(150 * (1 - i / border_width))
+            border_color = (*color[:3], alpha)
+ 
+            border_img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+            border_draw = ImageDraw.Draw(border_img)
+ 
+            # Top border
+            border_draw.rectangle([i, i, width-i, i+1], fill=border_color)
+            # Bottom border  
+            border_draw.rectangle([i, height-i-1, width-i, height-i], fill=border_color)
+ 
+            frame.paste(border_img, (0, 0), border_img)
+ 
+    elif scene_info['type'] == 'cta':
+        # Add pulsing corner effects
+        pulse = (math.sin(frame_num * 0.6) + 1) / 2  # 0 to 1
+        corner_size = int(50 + pulse * 30)
+ 
+        effect_img = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        effect_draw = ImageDraw.Draw(effect_img)
+ 
+        # Corner highlights
+        alpha = int(100 + pulse * 100)
+        corner_color = (255, 100, 100, alpha)
+ 
+        # Top corners
+        effect_draw.polygon([(0, 0), (corner_size, 0), (0, corner_size)], fill=corner_color)
+        effect_draw.polygon([(width, 0), (width-corner_size, 0), (width, corner_size)], fill=corner_color)
+ 
+        # Bottom corners
+        effect_draw.polygon([(0, height), (corner_size, height), (0, height-corner_size)], fill=corner_color)
+        effect_draw.polygon([(width, height), (width-corner_size, height), (width, height-corner_size)], fill=corner_color)
+ 
+        frame.paste(effect_img, (0, 0), effect_img)
+ 
+ 
+# Add static file serving for generated videos
+@app.route('/static/videos/<filename>')
+def serve_video(filename):
+    """Serve generated video files"""
+    try:
+        return send_from_directory('static/videos', filename)
+    except Exception as e:
+        logger.error(f"Error serving video {filename}: {str(e)}")
+        return jsonify({'error': 'Video not found'}), 404
+ 
+ 
+# Update batch generation to use new FFmpeg approach
+def generate_video_batch_ffmpeg(batch_id):
+    """Generate videos for all jobs in a batch using FFmpeg"""
+    try:
+        batch_path = f"data/jobs/batch_{batch_id}.json"
         if not os.path.exists(batch_path):
-            return jsonify({'error': 'Batch not found'}), 404
-
+            return None
+ 
         with open(batch_path, 'r') as f:
             batch_data = json.load(f)
-
+ 
         successful_jobs = [r for r in batch_data['results'] if r['status'] == 'success']
         video_results = []
-
-        logger.info(f"Starting video generation for {len(successful_jobs)} jobs in batch {batch_id}")
-
+ 
+        logger.info(f"Starting FFmpeg video generation for {len(successful_jobs)} jobs in batch {batch_id}")
+ 
         for job in successful_jobs:
             job_id = job['job_id']
             try:
-                # Generate video using existing video generation logic
-                output_path = f"remotion/public/out/{job_id}.mp4"
-                
-                cmd = [
-                    "npx", "remotion", "render",
-                    "src/index.tsx", "MyAdVideo",
-                    "--props", f'{{"jobId":"{job_id}"}}',
-                    "--output", output_path
-                ]
-
-                process = subprocess.run(cmd, cwd="remotion", capture_output=True, text=True, timeout=300)
-
-                if process.returncode == 0:
+                # Load job data
+                job_path = f"data/jobs/{job_id}.json"
+                with open(job_path, 'r') as f:
+                    job_data = json.load(f)
+ 
+                # Generate video using FFmpeg
+                video_path = generate_ffmpeg_video(job_data)
+ 
+                if video_path:
                     video_results.append({
                         "job_id": job_id,
                         "style": job['style'],
                         "duration": job['duration'],
                         "status": "success",
-                        "video_path": f"/out/{job_id}.mp4"
+                        "video_path": video_path
                     })
                     logger.info(f"Successfully generated video for {job_id}")
                 else:
@@ -354,19 +788,9 @@ def generate_video_batch():
                         "style": job['style'],
                         "duration": job['duration'],
                         "status": "failed",
-                        "error": process.stderr
+                        "error": "FFmpeg generation failed"
                     })
-                    logger.error(f"Video generation failed for {job_id}: {process.stderr}")
-
-            except subprocess.TimeoutExpired:
-                video_results.append({
-                    "job_id": job_id,
-                    "style": job['style'],
-                    "duration": job['duration'],
-                    "status": "failed",
-                    "error": "Video generation timeout"
-                })
-                logger.error(f"Video generation timeout for {job_id}")
+ 
             except Exception as e:
                 video_results.append({
                     "job_id": job_id,
@@ -376,28 +800,32 @@ def generate_video_batch():
                     "error": str(e)
                 })
                 logger.error(f"Video generation error for {job_id}: {str(e)}")
+ 
+        return video_results
+ 
+    except Exception as e:
+        logger.error(f"Error in batch video generation: {str(e)}")
+        return None
+@app.route('/api/job-preview/<job_id>', methods=['GET'])
+def preview_job_json(job_id):
+    """Return the saved job_id.json for preview/debugging"""
+    try:
+        path = f"data/jobs/{job_id}.json"
+        if not os.path.exists(path):
+            return jsonify({'error': 'Job not found'}), 404
 
-        # Update batch data with video results
-        batch_data['video_results'] = video_results
-        batch_data['videos_generated_at'] = time.time()
-        
-        with open(batch_path, 'w') as f:
-            json.dump(batch_data, f, indent=2)
+        with open(path, 'r') as f:
+            data = json.load(f)
 
-        successful_videos = len([r for r in video_results if r['status'] == 'success'])
-        
         return jsonify({
             "success": True,
-            "batch_id": batch_id,
-            "total_videos": len(video_results),
-            "successful_videos": successful_videos,
-            "failed_videos": len(video_results) - successful_videos,
-            "video_results": video_results
+            "job_id": job_id,
+            "data": data
         }), 200
 
     except Exception as e:
-        logger.error(f"Error in batch video generation: {str(e)}")
-        return jsonify({'error': 'Batch video generation failed'}), 500
+        logger.error(f"Error previewing job JSON: {str(e)}")
+        return jsonify({'error': 'Failed to load job preview'}), 500
 
 
 @app.route('/api/performance-insights', methods=['POST'])
@@ -896,39 +1324,6 @@ def optimize_script():
     except Exception as e:
         logger.error(f"Unexpected error in optimize_script: {str(e)}")
         return jsonify({'error': 'Failed to optimize script'}), 500
-
-
-
-@app.route('/api/generate-video', methods=['POST'])
-def generate_video():
-    try:
-        data = request.get_json()
-        job_id = data.get('job_id')
-
-        if not job_id:
-            return jsonify({'error': 'job_id required'}), 400
-
-        input_path = f"remotion/input/{job_id}.json"
-        output_path = f"remotion/public/out/{job_id}.mp4"
-
-        cmd = [
-            "npx", "remotion", "render",
-            "src/index.tsx", "MyAdVideo",
-            "--props", f'{{"jobId":"{job_id}"}}',
-            "--output", output_path
-        ]
-
-        process = subprocess.run(cmd, cwd="remotion", capture_output=True, text=True)
-
-        if process.returncode != 0:
-            logger.error(f"Remotion error: {process.stderr}")
-            return jsonify({'error': 'Video generation failed', 'details': process.stderr}), 500
-
-        return jsonify({"success": True, "video_path": f"/out/{job_id}.mp4"}), 200
-
-    except Exception as e:
-        logger.error(f"Error in generate_video: {str(e)}")
-        return jsonify({'error': 'Internal error generating video'}), 500
 
 
 
