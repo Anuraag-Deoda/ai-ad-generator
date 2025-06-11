@@ -3,8 +3,15 @@ from flask_cors import CORS
 import validators
 import logging
 import time
-from scraper import scrape_product_data
 import uuid
+import os
+import json
+import subprocess
+from dotenv import load_dotenv
+from scraper import scrape_product_data
+from ai_service import generate_ad_script
+
+load_dotenv()
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -84,6 +91,75 @@ def analyze_url():
     except Exception as e:
         logger.error(f"Unexpected error in analyze_url: {str(e)}")
         return jsonify({'error': 'Internal server error occurred'}), 500
+
+
+@app.route('/api/generate-content', methods=['POST'])
+def generate_content():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No JSON body provided'}), 400
+
+        job_id = data.get('job_id') or str(uuid.uuid4())
+        product = data.get('product')
+
+        if not product or not product.get('title'):
+            return jsonify({'error': 'Invalid product data'}), 400
+
+        script = generate_ad_script(product)
+
+        output = {
+            "job_id": job_id,
+            "title": product.get('title'),
+            "price": product.get('price'),
+            "images": product.get('images'),
+            "script": script
+        }
+
+        os.makedirs("remotion/input", exist_ok=True)
+        with open(f"remotion/input/{job_id}.json", "w") as f:
+            json.dump(output, f, indent=2)
+
+        return jsonify({"success": True, "job_id": job_id, "script": script}), 200
+
+    except Exception as e:
+        logger.error(f"Error in generate_content: {str(e)}")
+        return jsonify({'error': 'Failed to generate script'}), 500
+
+
+
+@app.route('/api/generate-video', methods=['POST'])
+def generate_video():
+    try:
+        data = request.get_json()
+        job_id = data.get('job_id')
+
+        if not job_id:
+            return jsonify({'error': 'job_id required'}), 400
+
+        input_path = f"remotion/input/{job_id}.json"
+        output_path = f"remotion/public/out/{job_id}.mp4"
+
+        cmd = [
+            "npx", "remotion", "render",
+            "src/index.tsx", "MyAdVideo",
+            "--props", f'{{"jobId":"{job_id}"}}',
+            "--output", output_path
+        ]
+
+        process = subprocess.run(cmd, cwd="remotion", capture_output=True, text=True)
+
+        if process.returncode != 0:
+            logger.error(f"Remotion error: {process.stderr}")
+            return jsonify({'error': 'Video generation failed', 'details': process.stderr}), 500
+
+        return jsonify({"success": True, "video_path": f"/out/{job_id}.mp4"}), 200
+
+    except Exception as e:
+        logger.error(f"Error in generate_video: {str(e)}")
+        return jsonify({'error': 'Internal error generating video'}), 500
+
+
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
