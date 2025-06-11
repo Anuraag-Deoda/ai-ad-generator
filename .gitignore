@@ -18,3 +18,4 @@ Thumbs.db
 videos/
 backend/static/videos/
 node_modules
+backend/.env
