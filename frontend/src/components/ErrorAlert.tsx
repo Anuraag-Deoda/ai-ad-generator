@@ -1,3 +1,5 @@
+import { Alert, Button } from 'react-bootstrap';
+
 type Props = {
   message: string;
   onClose: () => void;
@@ -5,12 +7,12 @@ type Props = {
 
 export default function ErrorAlert({ message, onClose }: Props) {
   return (
-    <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative max-w-xl mx-auto mb-4">
-      <strong className="font-bold">Error: </strong>
-      <span>{message}</span>
-      <span onClick={onClose} className="absolute top-0 bottom-0 right-0 px-4 py-3 cursor-pointer">
-        ×
-      </span>
-    </div>
+    <Alert variant="danger" dismissible onClose={onClose} className="mb-4">
+      <Alert.Heading className="h6">
+        <i className="bi bi-exclamation-triangle-fill me-2"></i>
+        Error
+      </Alert.Heading>
+      <p className="mb-0">{message}</p>
+    </Alert>
   );
 }
