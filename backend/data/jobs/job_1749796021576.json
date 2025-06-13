@@ -1,0 +1,91 @@
+{
+  "job_id": "job_1749796021576",
+  "title": "Camel Premium Poster Colour with Brush - 20 Shades (Multicolor)",
+  "price": "\u20b9650.00",
+  "images": [
+    "https://m.media-amazon.com/images/I/51DQ92yQHdL._SX300_SY300_QL70_FMwebp_.jpg"
+  ],
+  "script": {
+    "hook": "Unleash your creativity with vibrant colors that pop!",
+    "pitch": "Introducing Camel Premium Poster Colours \u2013 your secret weapon for stunning art that stands out and captivates!",
+    "features": "With 20 brilliant shades, including Super White and Tanjore Gold, these colors flow effortlessly, dry quickly, and are perfect for every artist. Ideal for students aiming for excellence!",
+    "cta": "Grab your Camel Poster Colour set now for just \u20b9650 and elevate your art today!",
+    "visual_cues": [
+      "Scene 1: Close-up of Camel Premium Poster Colour boxes being opened, showcasing the vibrant colors.",
+      "Scene 2: A brush gliding over canvas, creating smooth, colorful strokes.",
+      "Scene 3: A delighted student holding up their finished artwork, beaming with pride.",
+      "Scene 4: Bold text overlay with 'Order Now!' and a timer graphic for urgency."
+    ],
+    "word_count": 89,
+    "key_messages": [
+      "Vibrant colors that inspire creativity",
+      "Designed for students and artists alike",
+      "Elevate your art with Camel's premium quality"
+    ],
+    "metadata": {
+      "product_title": "Camel Premium Poster Colour with Brush - 20 Shades (Multicolor)",
+      "style": "energetic",
+      "duration": 30,
+      "generated_at": 1749796045.0553076,
+      "category": "general",
+      "price_point": "(premium)",
+      "target_audience": "general consumers"
+    },
+    "production_notes": {
+      "recommended_music": "upbeat electronic or pop",
+      "color_mood": "bright and vibrant",
+      "pacing": "moderate with clear sections",
+      "visual_style": "dynamic with quick cuts"
+    }
+  },
+  "style": "energetic",
+  "duration": 30,
+  "generated_at": 1749796045.057313,
+  "video_metadata": {
+    "color_scheme": {
+      "primary": "#FF5733",
+      "secondary": "#C70039",
+      "accent": "#FFC300",
+      "background": "#FFFFFF"
+    },
+    "typography": {
+      "primary_font": "Montserrat",
+      "secondary_font": "Roboto",
+      "font_weight": "bold"
+    },
+    "animations": [
+      "fade_in",
+      "zoom_in",
+      "bounce"
+    ],
+    "music_style": "upbeat",
+    "visual_effects": [
+      "product_highlights",
+      "gradient_overlays"
+    ],
+    "layout_suggestions": {
+      "product_position": "center",
+      "text_alignment": "center",
+      "logo_placement": "top_right"
+    }
+  },
+  "product_analysis": {
+    "target_audience": "students and hobbyists interested in art and craft",
+    "emotional_triggers": [
+      "creativity",
+      "self-expression",
+      "achievement"
+    ],
+    "value_proposition": "Premium quality poster colors designed for vibrant results and ease of use, perfect for students and artists alike.",
+    "competitive_advantage": "High pigment content for vibrant colors, quick drying time, and easy mixing, along with complimentary brushes.",
+    "urgency_factors": [
+      "limited time offer",
+      "seasonal promotions"
+    ],
+    "trust_signals": [
+      "made in India",
+      "high-quality pigments"
+    ],
+    "recommended_tone": "energetic"
+  }
+}
