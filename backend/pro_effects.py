@@ -1200,3 +1200,320 @@ class GeometricPatterns:
             ], fill=(*color, alpha))
 
         return img
+
+
+# ============================================================================
+# KINETIC TYPOGRAPHY - Advanced Text Motion Effects
+# ============================================================================
+
+class KineticTypography:
+    """Advanced kinetic typography effects for dynamic text animations"""
+
+    @staticmethod
+    def word_explosion(image: Image.Image, text: str, progress: float,
+                       center: Tuple[int, int], font,
+                       color: Tuple[int, int, int] = (255, 255, 255)) -> Image.Image:
+        """Words explode outward then reassemble"""
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+
+        overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        words = text.split()
+        cx, cy = center
+
+        # Calculate word positions when assembled
+        word_positions = []
+        current_x = cx - sum(draw.textlength(w + " ", font=font) for w in words) // 2
+
+        for word in words:
+            word_w = draw.textlength(word, font=font)
+            word_positions.append((current_x, cy))
+            current_x += word_w + draw.textlength(" ", font=font)
+
+        if progress < 0.5:
+            # Explosion phase - words move outward
+            t = progress / 0.5
+            t_ease = 1 - (1 - t) ** 3  # ease out cubic
+
+            for i, (word, (wx, wy)) in enumerate(zip(words, word_positions)):
+                # Calculate explosion direction
+                angle = (i / len(words)) * 2 * math.pi + math.pi / 4
+                distance = 300 * t_ease
+
+                # Current position
+                offset_x = math.cos(angle) * distance
+                offset_y = math.sin(angle) * distance
+
+                # Scale down as it moves out
+                scale = 1 + 0.5 * t_ease
+                alpha = int(255 * (1 - t_ease * 0.5))
+
+                draw.text((wx + offset_x, wy + offset_y), word,
+                         font=font, fill=(*color, alpha))
+
+        else:
+            # Reassembly phase - words come back
+            t = (progress - 0.5) / 0.5
+            t_ease = t * t * (3 - 2 * t)  # smoothstep
+
+            for i, (word, (wx, wy)) in enumerate(zip(words, word_positions)):
+                # Return from explosion position
+                angle = (i / len(words)) * 2 * math.pi + math.pi / 4
+                distance = 300 * (1 - t_ease)
+
+                offset_x = math.cos(angle) * distance
+                offset_y = math.sin(angle) * distance
+
+                alpha = int(255 * (0.5 + t_ease * 0.5))
+
+                draw.text((wx + offset_x, wy + offset_y), word,
+                         font=font, fill=(*color, alpha))
+
+        return Image.alpha_composite(image, overlay)
+
+    @staticmethod
+    def wave_reveal(image: Image.Image, text: str, progress: float,
+                    position: Tuple[int, int], font,
+                    color: Tuple[int, int, int] = (255, 255, 255),
+                    wave_height: int = 30) -> Image.Image:
+        """Text reveals in a wave pattern"""
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+
+        overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        x, y = position
+        char_widths = [draw.textlength(c, font=font) for c in text]
+
+        current_x = x
+        for i, char in enumerate(text):
+            # Calculate wave offset for this character
+            char_progress = max(0, min(1, (progress * 2) - (i / len(text))))
+
+            if char_progress > 0:
+                # Wave motion
+                wave_offset = math.sin(char_progress * math.pi) * wave_height * (1 - char_progress)
+                char_y = y - wave_offset
+
+                # Fade in
+                alpha = int(255 * min(1, char_progress * 2))
+
+                # Scale effect
+                scale_factor = 0.5 + 0.5 * char_progress
+
+                draw.text((current_x, char_y), char,
+                         font=font, fill=(*color, alpha))
+
+            current_x += char_widths[i]
+
+        return Image.alpha_composite(image, overlay)
+
+    @staticmethod
+    def split_reveal(image: Image.Image, text: str, progress: float,
+                     center: Tuple[int, int], font,
+                     color: Tuple[int, int, int] = (255, 255, 255)) -> Image.Image:
+        """Text splits and reveals from center"""
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+
+        overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        cx, cy = center
+        text_width = draw.textlength(text, font=font)
+        text_start_x = cx - text_width // 2
+
+        mid_point = len(text) // 2
+
+        # Left half (moves left then back)
+        left_text = text[:mid_point]
+        # Right half (moves right then back)
+        right_text = text[mid_point:]
+
+        if progress < 0.5:
+            # Split apart phase
+            t = progress / 0.5
+            t_ease = t * t  # ease in quad
+            split_distance = 100 * t_ease
+
+            # Left moves left
+            left_x = text_start_x - split_distance
+            # Right moves right
+            right_x = text_start_x + draw.textlength(left_text, font=font) + split_distance
+
+            alpha = int(255 * (1 - t_ease * 0.3))
+
+        else:
+            # Come back together phase
+            t = (progress - 0.5) / 0.5
+            t_ease = 1 - (1 - t) ** 2  # ease out quad
+            split_distance = 100 * (1 - t_ease)
+
+            left_x = text_start_x - split_distance
+            right_x = text_start_x + draw.textlength(left_text, font=font) + split_distance
+
+            alpha = int(255 * (0.7 + t_ease * 0.3))
+
+        draw.text((left_x, cy), left_text, font=font, fill=(*color, alpha))
+        draw.text((right_x, cy), right_text, font=font, fill=(*color, alpha))
+
+        return Image.alpha_composite(image, overlay)
+
+    @staticmethod
+    def bounce_in(image: Image.Image, text: str, progress: float,
+                  position: Tuple[int, int], font,
+                  color: Tuple[int, int, int] = (255, 255, 255)) -> Image.Image:
+        """Letters bounce in individually with elastic effect"""
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+
+        overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        x, y = position
+
+        def ease_out_elastic(t):
+            if t == 0 or t == 1:
+                return t
+            return pow(2, -10 * t) * math.sin((t - 0.075) * (2 * math.pi) / 0.3) + 1
+
+        current_x = x
+        for i, char in enumerate(text):
+            # Stagger the animation for each letter
+            delay = i * 0.05
+            char_progress = max(0, min(1, (progress - delay) / (1 - delay * len(text) * 0.5)))
+
+            if char_progress > 0:
+                # Elastic bounce
+                elastic = ease_out_elastic(char_progress)
+
+                # Start from above
+                start_y = y - 100
+                char_y = start_y + (y - start_y) * elastic
+
+                # Scale pops in
+                scale = elastic
+
+                # Alpha fades in quickly
+                alpha = int(255 * min(1, char_progress * 3))
+
+                draw.text((current_x, char_y), char,
+                         font=font, fill=(*color, alpha))
+
+            current_x += draw.textlength(char, font=font)
+
+        return Image.alpha_composite(image, overlay)
+
+    @staticmethod
+    def typewriter_pro(image: Image.Image, text: str, progress: float,
+                       position: Tuple[int, int], font,
+                       color: Tuple[int, int, int] = (255, 255, 255),
+                       cursor_color: Tuple[int, int, int] = (255, 255, 255)) -> Image.Image:
+        """Enhanced typewriter effect with cursor and sound sync points"""
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+
+        overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        x, y = position
+
+        # Calculate visible characters
+        visible_chars = int(len(text) * min(1, progress * 1.2))
+        visible_text = text[:visible_chars]
+
+        # Draw visible text
+        draw.text((x, y), visible_text, font=font, fill=(*color, 255))
+
+        # Draw cursor
+        if progress < 1:
+            cursor_x = x + draw.textlength(visible_text, font=font)
+            bbox = draw.textbbox((0, 0), "I", font=font)
+            cursor_height = bbox[3] - bbox[1]
+
+            # Blinking cursor
+            if int(progress * 15) % 2 == 0:
+                draw.rectangle([cursor_x + 2, y, cursor_x + 5, y + cursor_height],
+                              fill=(*cursor_color, 255))
+
+        return Image.alpha_composite(image, overlay)
+
+    @staticmethod
+    def glitch_text(image: Image.Image, text: str, progress: float,
+                    position: Tuple[int, int], font,
+                    color: Tuple[int, int, int] = (255, 255, 255),
+                    glitch_intensity: float = 0.5) -> Image.Image:
+        """Text with glitch distortion effect"""
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+
+        overlay = Image.new('RGBA', image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        x, y = position
+
+        # Base text
+        draw.text((x, y), text, font=font, fill=(*color, 255))
+
+        # Glitch layers
+        if glitch_intensity > 0:
+            # RGB split
+            offset = int(5 * glitch_intensity * (0.5 + 0.5 * math.sin(progress * 20)))
+
+            # Red channel offset
+            draw.text((x + offset, y), text, font=font, fill=(255, 0, 0, int(100 * glitch_intensity)))
+            # Cyan channel offset
+            draw.text((x - offset, y), text, font=font, fill=(0, 255, 255, int(100 * glitch_intensity)))
+
+            # Random block glitches
+            if random.random() < glitch_intensity * 0.3:
+                glitch_y = y + random.randint(-10, 10)
+                glitch_x = x + random.randint(-20, 20)
+                draw.text((glitch_x, glitch_y), text[:random.randint(1, len(text))],
+                         font=font, fill=(*color, 150))
+
+        return Image.alpha_composite(image, overlay)
+
+    @staticmethod
+    def spotlight_reveal(image: Image.Image, text: str, progress: float,
+                         center: Tuple[int, int], font,
+                         color: Tuple[int, int, int] = (255, 255, 255)) -> Image.Image:
+        """Text revealed by moving spotlight"""
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+
+        width, height = image.size
+        cx, cy = center
+
+        # Create text layer
+        text_layer = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        text_draw = ImageDraw.Draw(text_layer)
+
+        text_width = text_draw.textlength(text, font=font)
+        text_x = cx - text_width // 2
+
+        text_draw.text((text_x, cy), text, font=font, fill=(*color, 255))
+
+        # Create spotlight mask
+        mask = Image.new('L', (width, height), 0)
+        mask_draw = ImageDraw.Draw(mask)
+
+        # Spotlight moves across text
+        spotlight_x = int(text_x - 100 + (text_width + 200) * progress)
+        spotlight_radius = 150
+
+        # Draw spotlight gradient
+        for r in range(spotlight_radius, 0, -5):
+            brightness = int(255 * (1 - r / spotlight_radius) ** 0.5)
+            mask_draw.ellipse([
+                spotlight_x - r, cy - r - 50,
+                spotlight_x + r, cy + r + 50
+            ], fill=brightness)
+
+        # Apply mask to text
+        text_layer.putalpha(mask)
+
+        return Image.alpha_composite(image, text_layer)

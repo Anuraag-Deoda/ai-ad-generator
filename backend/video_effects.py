@@ -764,9 +764,112 @@ class KenBurnsEffect:
             'pull_back_reveal': {
                 'start_zoom': 1.5, 'end_zoom': 1.0,
                 'start_pos': (0.5, 0.5), 'end_pos': (0.5, 0.5)
+            },
+            # New advanced presets
+            'orbit': {
+                'type': 'circular',
+                'start_zoom': 1.1, 'end_zoom': 1.2,
+                'start_pos': (0.5, 0.5), 'end_pos': (0.5, 0.5),
+                'orbit_radius': 0.1
+            },
+            'spiral_in': {
+                'type': 'spiral',
+                'start_zoom': 0.9, 'end_zoom': 1.3,
+                'start_pos': (0.3, 0.3), 'end_pos': (0.5, 0.5),
+                'rotations': 0.5
+            },
+            'bounce_zoom': {
+                'type': 'bounce',
+                'start_zoom': 1.0, 'end_zoom': 1.2,
+                'start_pos': (0.5, 0.5), 'end_pos': (0.5, 0.5),
+                'bounces': 3
+            },
+            'drift': {
+                'type': 'random',
+                'start_zoom': 1.1, 'end_zoom': 1.15,
+                'start_pos': (0.5, 0.5), 'end_pos': (0.5, 0.5)
+            },
+            'slow_zoom': {
+                'start_zoom': 1.0, 'end_zoom': 1.1,
+                'start_pos': (0.5, 0.5), 'end_pos': (0.5, 0.5)
+            },
+            'cinematic_reveal': {
+                'start_zoom': 1.8, 'end_zoom': 1.0,
+                'start_pos': (0.5, 0.3), 'end_pos': (0.5, 0.5)
             }
         }
         return presets.get(preset_name, presets['zoom_in_center'])
+
+    @staticmethod
+    def apply_advanced(image: Image.Image, progress: float, preset_name: str,
+                       target_size: Tuple[int, int] = None) -> Image.Image:
+        """Apply advanced Ken Burns effects including orbit and spiral"""
+        preset = KenBurnsEffect.get_preset(preset_name)
+        preset_type = preset.get('type', 'linear')
+
+        orig_width, orig_height = image.size
+        target_size = target_size or (orig_width, orig_height)
+
+        if preset_type == 'circular':
+            # Orbit effect - camera circles around center point
+            radius = preset.get('orbit_radius', 0.1)
+            angle = progress * 2 * math.pi
+
+            center_x = 0.5 + radius * math.cos(angle)
+            center_y = 0.5 + radius * math.sin(angle)
+
+            current_zoom = preset['start_zoom'] + (preset['end_zoom'] - preset['start_zoom']) * progress
+
+            return KenBurnsEffect.apply(
+                image, progress,
+                start_zoom=current_zoom, end_zoom=current_zoom,
+                start_pos=(center_x, center_y), end_pos=(center_x, center_y),
+                target_size=target_size
+            )
+
+        elif preset_type == 'spiral':
+            # Spiral in/out effect
+            rotations = preset.get('rotations', 0.5)
+            angle = progress * rotations * 2 * math.pi
+
+            # Start from outer position, spiral to center
+            t = Easing.ease_in_out_cubic(progress)
+            radius = (1 - t) * 0.2
+
+            center_x = preset['end_pos'][0] + radius * math.cos(angle)
+            center_y = preset['end_pos'][1] + radius * math.sin(angle)
+
+            current_zoom = preset['start_zoom'] + (preset['end_zoom'] - preset['start_zoom']) * t
+
+            return KenBurnsEffect.apply(
+                image, 1.0,  # Progress handled manually
+                start_zoom=current_zoom, end_zoom=current_zoom,
+                start_pos=(center_x, center_y), end_pos=(center_x, center_y),
+                target_size=target_size
+            )
+
+        elif preset_type == 'bounce':
+            # Bouncy zoom effect
+            bounces = preset.get('bounces', 3)
+            bounce_progress = Easing.ease_out_bounce(progress)
+
+            current_zoom = preset['start_zoom'] + (preset['end_zoom'] - preset['start_zoom']) * bounce_progress
+
+            return KenBurnsEffect.apply(
+                image, 1.0,
+                start_zoom=current_zoom, end_zoom=current_zoom,
+                start_pos=preset['start_pos'], end_pos=preset['start_pos'],
+                target_size=target_size
+            )
+
+        else:
+            # Standard linear Ken Burns
+            return KenBurnsEffect.apply(
+                image, progress,
+                start_zoom=preset['start_zoom'], end_zoom=preset['end_zoom'],
+                start_pos=preset['start_pos'], end_pos=preset['end_pos'],
+                target_size=target_size
+            )
 
 
 # ============================================================================
@@ -1202,3 +1305,324 @@ def apply_shadow_to_image(image: Image.Image, offset: Tuple[int, int] = (10, 10)
     output.paste(image, image_pos, image)
 
     return output
+
+
+# ============================================================================
+# LENS FLARE EFFECTS
+# ============================================================================
+
+class LensFlare:
+    """Cinematic lens flare effects"""
+
+    @staticmethod
+    def render(image: Image.Image, position: Tuple[int, int],
+               intensity: float = 0.5, color: Tuple[int, int, int] = (255, 200, 150),
+               flare_type: str = "cinematic") -> Image.Image:
+        """
+        Add cinematic lens flare effect
+
+        Args:
+            image: Source image
+            position: Flare source position (x, y)
+            intensity: Flare brightness (0-1)
+            color: Flare color tint
+            flare_type: Type of flare (cinematic, anamorphic, natural, sci_fi)
+        """
+        if image.mode != 'RGBA':
+            image = image.convert('RGBA')
+
+        width, height = image.size
+        overlay = Image.new('RGBA', (width, height), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+
+        x, y = position
+
+        if flare_type == "cinematic":
+            # Main glow
+            for r in range(150, 0, -10):
+                alpha = int(intensity * 100 * (1 - r / 150))
+                glow_color = (*color, alpha)
+                draw.ellipse([x - r, y - r, x + r, y + r], fill=glow_color)
+
+            # Orbs along the flare line
+            center_x, center_y = width // 2, height // 2
+            dx = center_x - x
+            dy = center_y - y
+
+            for i in range(5):
+                t = 0.3 + i * 0.15
+                orb_x = int(x + dx * t)
+                orb_y = int(y + dy * t)
+                orb_r = 20 + i * 10
+                orb_alpha = int(intensity * 60 * (1 - i / 5))
+                orb_color = (*color, orb_alpha)
+                draw.ellipse([orb_x - orb_r, orb_y - orb_r, orb_x + orb_r, orb_y + orb_r],
+                            fill=orb_color)
+
+        elif flare_type == "anamorphic":
+            # Horizontal streak (anamorphic lens style)
+            streak_height = 30
+            streak_width = width
+
+            for offset in range(streak_height, 0, -2):
+                alpha = int(intensity * 80 * (1 - offset / streak_height))
+                streak_color = (*color, alpha)
+                draw.rectangle([0, y - offset, streak_width, y + offset], fill=streak_color)
+
+            # Central bright spot
+            for r in range(60, 0, -5):
+                alpha = int(intensity * 150 * (1 - r / 60))
+                glow_color = (*color, alpha)
+                draw.ellipse([x - r, y - r // 2, x + r, y + r // 2], fill=glow_color)
+
+        elif flare_type == "natural":
+            # Softer, more natural sun flare
+            for r in range(200, 0, -15):
+                alpha = int(intensity * 50 * (1 - r / 200) ** 2)
+                glow_color = (*color, alpha)
+                draw.ellipse([x - r, y - r, x + r, y + r], fill=glow_color)
+
+        elif flare_type == "sci_fi":
+            # Geometric sci-fi style flare
+            # Hexagonal pattern
+            for ring in range(3):
+                ring_r = 50 + ring * 40
+                for i in range(6):
+                    angle = i * math.pi / 3 + ring * 0.2
+                    px = int(x + ring_r * math.cos(angle))
+                    py = int(y + ring_r * math.sin(angle))
+                    point_r = 15 - ring * 3
+                    alpha = int(intensity * 120 * (1 - ring / 3))
+                    point_color = (*color, alpha)
+                    draw.ellipse([px - point_r, py - point_r, px + point_r, py + point_r],
+                                fill=point_color)
+
+            # Center glow
+            for r in range(80, 0, -5):
+                alpha = int(intensity * 100 * (1 - r / 80))
+                glow_color = (*color, alpha)
+                draw.ellipse([x - r, y - r, x + r, y + r], fill=glow_color)
+
+        # Apply blur for smoothness
+        overlay = overlay.filter(ImageFilter.GaussianBlur(radius=10))
+
+        return Image.alpha_composite(image, overlay)
+
+    @staticmethod
+    def animated_flare(image: Image.Image, progress: float,
+                       start_pos: Tuple[int, int], end_pos: Tuple[int, int],
+                       intensity: float = 0.5, flare_type: str = "cinematic") -> Image.Image:
+        """Animate lens flare moving across frame"""
+        t = Easing.ease_in_out_cubic(progress)
+        x = int(start_pos[0] + (end_pos[0] - start_pos[0]) * t)
+        y = int(start_pos[1] + (end_pos[1] - start_pos[1]) * t)
+
+        # Intensity varies with position
+        animated_intensity = intensity * (0.5 + 0.5 * math.sin(progress * math.pi))
+
+        return LensFlare.render(image, (x, y), animated_intensity, flare_type=flare_type)
+
+
+# ============================================================================
+# GLITCH EFFECTS
+# ============================================================================
+
+class GlitchEffect:
+    """Digital glitch and distortion effects"""
+
+    @staticmethod
+    def apply(image: Image.Image, intensity: float = 0.5,
+              glitch_type: str = "digital") -> Image.Image:
+        """
+        Apply glitch/distortion effect
+
+        Args:
+            image: Source image
+            intensity: Effect strength (0-1)
+            glitch_type: Type of glitch (digital, vhs, rgb_split, scan_lines, corrupt)
+        """
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+
+        width, height = image.size
+        img_array = np.array(image)
+
+        if glitch_type == "digital":
+            # Random block displacement
+            result = img_array.copy()
+            num_blocks = int(10 * intensity)
+
+            for _ in range(num_blocks):
+                # Random block
+                block_h = random.randint(5, 50)
+                block_y = random.randint(0, height - block_h)
+                offset = random.randint(-50, 50)
+
+                # Shift block horizontally
+                block = result[block_y:block_y + block_h, :].copy()
+                if offset > 0:
+                    result[block_y:block_y + block_h, offset:] = block[:, :-offset]
+                elif offset < 0:
+                    result[block_y:block_y + block_h, :offset] = block[:, -offset:]
+
+            # Random color channel offset
+            if intensity > 0.3:
+                channel = random.randint(0, 2)
+                shift = random.randint(-10, 10)
+                result[:, :, channel] = np.roll(result[:, :, channel], shift, axis=1)
+
+            return Image.fromarray(result)
+
+        elif glitch_type == "vhs":
+            # VHS tape distortion
+            result = img_array.copy()
+
+            # Horizontal tracking lines
+            for y in range(0, height, max(1, int(20 / (intensity + 0.1)))):
+                if random.random() < intensity * 0.3:
+                    line_height = random.randint(1, 5)
+                    y_end = min(y + line_height, height)
+                    offset = random.randint(-20, 20)
+                    result[y:y_end] = np.roll(result[y:y_end], offset, axis=1)
+
+            # Color bleeding
+            result[:, :, 0] = np.roll(result[:, :, 0], int(3 * intensity), axis=1)
+            result[:, :, 2] = np.roll(result[:, :, 2], int(-3 * intensity), axis=1)
+
+            # Add noise
+            noise = np.random.normal(0, 20 * intensity, result.shape).astype(np.int16)
+            result = np.clip(result.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+
+            # Reduce saturation slightly
+            hsv = cv2.cvtColor(result, cv2.COLOR_RGB2HSV)
+            hsv[:, :, 1] = (hsv[:, :, 1] * (1 - 0.2 * intensity)).astype(np.uint8)
+            result = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
+
+            return Image.fromarray(result)
+
+        elif glitch_type == "rgb_split":
+            # RGB channel separation
+            offset = int(15 * intensity)
+
+            r, g, b = img_array[:, :, 0], img_array[:, :, 1], img_array[:, :, 2]
+
+            # Offset red and blue channels
+            r_shifted = np.roll(r, offset, axis=1)
+            b_shifted = np.roll(b, -offset, axis=1)
+
+            result = np.stack([r_shifted, g, b_shifted], axis=2)
+            return Image.fromarray(result)
+
+        elif glitch_type == "scan_lines":
+            # CRT scan line effect
+            result = img_array.copy()
+
+            # Darken every other line
+            result[::2] = (result[::2] * (1 - 0.3 * intensity)).astype(np.uint8)
+
+            # Add slight horizontal offset to some lines
+            for y in range(0, height, 4):
+                if random.random() < intensity * 0.1:
+                    offset = random.randint(-5, 5)
+                    result[y] = np.roll(result[y], offset, axis=0)
+
+            return Image.fromarray(result)
+
+        elif glitch_type == "corrupt":
+            # Data corruption style
+            result = img_array.copy()
+
+            # Random byte corruption
+            num_corrupts = int(50 * intensity)
+            for _ in range(num_corrupts):
+                x = random.randint(0, width - 1)
+                y = random.randint(0, height - 1)
+                c = random.randint(0, 2)
+
+                # Corrupt a small region
+                x_end = min(x + random.randint(5, 30), width)
+                result[y, x:x_end, c] = random.randint(0, 255)
+
+            # Block duplication
+            if intensity > 0.5:
+                for _ in range(int(5 * intensity)):
+                    src_y = random.randint(0, height - 50)
+                    dst_y = random.randint(0, height - 50)
+                    block_h = random.randint(5, 30)
+
+                    src_y_end = min(src_y + block_h, height)
+                    dst_y_end = min(dst_y + block_h, height)
+
+                    result[dst_y:dst_y_end] = result[src_y:src_y_end]
+
+            return Image.fromarray(result)
+
+        return image
+
+    @staticmethod
+    def animated_glitch(image: Image.Image, progress: float,
+                        glitch_type: str = "digital",
+                        peak_time: float = 0.5,
+                        peak_duration: float = 0.3) -> Image.Image:
+        """
+        Apply animated glitch that peaks at a specific time
+
+        Args:
+            image: Source image
+            progress: Animation progress (0-1)
+            glitch_type: Type of glitch effect
+            peak_time: When glitch is strongest (0-1)
+            peak_duration: How long the peak lasts
+        """
+        # Calculate intensity based on distance from peak
+        dist_from_peak = abs(progress - peak_time)
+        if dist_from_peak < peak_duration / 2:
+            intensity = 1.0 - (dist_from_peak / (peak_duration / 2))
+        else:
+            intensity = 0.0
+
+        if intensity > 0.05:
+            return GlitchEffect.apply(image, intensity, glitch_type)
+        return image
+
+    @staticmethod
+    def glitch_transition(frame1: Image.Image, frame2: Image.Image,
+                         progress: float) -> Image.Image:
+        """Glitch-style transition between two frames"""
+        width, height = frame1.size
+
+        if progress < 0.4:
+            # Increasing glitch on frame1
+            intensity = progress / 0.4
+            return GlitchEffect.apply(frame1, intensity * 0.8, "digital")
+
+        elif progress < 0.6:
+            # Peak glitch - mix of both frames
+            local_progress = (progress - 0.4) / 0.2
+
+            # Create glitchy composite
+            result = np.array(frame1.convert('RGB')).copy()
+            frame2_array = np.array(frame2.convert('RGB'))
+
+            # Random blocks from frame2
+            num_blocks = int(20 * (1 - abs(local_progress - 0.5) * 2))
+            for _ in range(num_blocks):
+                block_h = random.randint(20, 100)
+                block_y = random.randint(0, height - block_h)
+                result[block_y:block_y + block_h] = frame2_array[block_y:block_y + block_h]
+
+            glitched = GlitchEffect.apply(Image.fromarray(result), 0.6, "rgb_split")
+            return glitched
+
+        else:
+            # Decreasing glitch on frame2
+            intensity = 1 - (progress - 0.6) / 0.4
+            return GlitchEffect.apply(frame2, intensity * 0.8, "digital")
+
+
+# OpenCV import for some effects
+try:
+    import cv2
+except ImportError:
+    # Fallback if cv2 not available
+    cv2 = None

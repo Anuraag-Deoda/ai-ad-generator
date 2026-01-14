@@ -54,12 +54,70 @@ from video_templates import (
     TEMPLATE_CONFIGS
 )
 
+# Import dynamic content
+from dynamic_content import (
+    DynamicContentRenderer,
+    PriceDisplay,
+    CountdownTimer,
+    StarRating,
+    ReviewQuote,
+    CTAButton,
+    render_price,
+    render_countdown,
+    render_rating,
+    render_quote,
+    render_cta
+)
+
+# Import industry templates
+from industry_templates import (
+    IndustryTemplateRenderer,
+    TemplateConfig,
+    SceneConfig,
+    INDUSTRY_TEMPLATES,
+    COLOR_SCHEMES,
+    get_template,
+    list_templates,
+    list_industries,
+    apply_template
+)
+
+# Import new effects
+from video_effects import LensFlare, GlitchEffect
+from pro_effects import KineticTypography as KineticTypographyPro
+
 logger = logging.getLogger(__name__)
 
 
 # ============================================================================
 # CONFIGURATION
 # ============================================================================
+
+@dataclass
+class DynamicContentConfig:
+    """Dynamic content configuration for video"""
+    show_price: bool = False
+    original_price: Optional[str] = None
+    sale_price: Optional[str] = None
+    price_animation: str = "drop"  # drop, slide, flash, bounce
+
+    show_countdown: bool = False
+    countdown_seconds: int = 86400  # 24 hours default
+    countdown_style: str = "flip"  # flip, digital, minimal, urgent
+
+    show_rating: bool = False
+    rating: float = 4.8
+    review_count: Optional[int] = None
+    rating_animation: str = "fill"  # fill, pop, glow
+
+    show_review: bool = False
+    review_quote: Optional[str] = None
+    review_author: Optional[str] = None
+
+    cta_text: str = "Shop Now"
+    cta_style: str = "pulse"  # pulse, shake, glow, swipe_up, bounce
+    cta_color: Tuple[int, int, int] = (255, 87, 51)
+
 
 @dataclass
 class VideoConfig:
@@ -80,6 +138,15 @@ class VideoConfig:
     text_animation: TextAnimation = TextAnimation.SLIDE_UP
     quality_preset: str = "high"  # low, medium, high
     template_style: str = "bold"  # minimal, bold, elegant, playful, tech, neon
+
+    # New dynamic content settings
+    dynamic_content: Optional[DynamicContentConfig] = None
+    industry_template: Optional[str] = None  # e.g., "ecommerce/flash_sale"
+
+    # New effects settings
+    enable_lens_flare: bool = False
+    enable_glitch_effects: bool = False
+    glitch_intensity: float = 0.5
 
 
 class SceneType(Enum):
@@ -377,6 +444,26 @@ class AdvancedVideoGenerator:
         if self.config.enable_particles and scene.particle_effect != 'none':
             background = self._add_advanced_particles(background, scene, progress, frame_num)
 
+        # 7.5. Add dynamic content (pricing, countdown, rating, CTA)
+        if self.config.dynamic_content:
+            background = self._add_dynamic_content(background, scene, progress, frame_num)
+
+        # 7.6. Apply lens flare effect
+        if self.config.enable_lens_flare and scene.type == SceneType.HOOK:
+            flare_progress = progress * 0.5  # Slower movement
+            flare_x = int(self.config.width * 0.8 - self.config.width * 0.3 * flare_progress)
+            flare_y = int(self.config.height * 0.2)
+            background = LensFlare.render(background, (flare_x, flare_y), intensity=0.4)
+
+        # 7.7. Apply glitch effect
+        if self.config.enable_glitch_effects and scene.type == SceneType.HOOK:
+            background = GlitchEffect.animated_glitch(
+                background, progress,
+                glitch_type="digital",
+                peak_time=0.3,
+                peak_duration=0.2
+            )
+
         # 8. Add scene-specific effects (enhanced)
         background = self._add_scene_effects_pro(background, scene, progress, frame_num)
 
@@ -611,6 +698,92 @@ class AdvancedVideoGenerator:
         # Update and render
         self.advanced_particles.update()
         return self.advanced_particles.render(frame)
+
+    def _add_dynamic_content(self, frame: Image.Image, scene: Scene,
+                             progress: float, frame_num: int) -> Image.Image:
+        """Add dynamic content elements based on scene type"""
+        if not self.config.dynamic_content:
+            return frame
+
+        dc = self.config.dynamic_content
+        width, height = self.config.width, self.config.height
+
+        # Convert frame for OpenCV compatibility
+        if frame.mode != 'RGB':
+            frame_rgb = frame.convert('RGB')
+        else:
+            frame_rgb = frame
+
+        # Convert PIL to numpy for dynamic_content module
+        frame_cv = cv2.cvtColor(np.array(frame_rgb), cv2.COLOR_RGB2BGR)
+
+        # Price Animation - show in PITCH scene
+        if dc.show_price and dc.original_price and scene.type == SceneType.PITCH:
+            price_y = height - 350
+            frame_cv = render_price(
+                frame_cv,
+                dc.original_price,
+                dc.sale_price,
+                progress,
+                (width // 2 - 150, price_y),
+                animation=dc.price_animation
+            )
+
+        # Countdown Timer - show in FEATURES scene
+        if dc.show_countdown and scene.type == SceneType.FEATURES:
+            countdown_y = 900
+            frame_cv = render_countdown(
+                frame_cv,
+                dc.countdown_seconds,
+                progress,
+                (width // 2 - 120, countdown_y),
+                style=dc.countdown_style
+            )
+
+        # Star Rating - show in FEATURES scene
+        if dc.show_rating and scene.type == SceneType.FEATURES:
+            rating_y = height - 450
+            frame_cv = render_rating(
+                frame_cv,
+                dc.rating,
+                progress,
+                (width // 2 - 180, rating_y),
+                review_count=dc.review_count,
+                animation=dc.rating_animation
+            )
+
+        # Review Quote - show in FEATURES scene
+        if dc.show_review and dc.review_quote and dc.review_author and scene.type == SceneType.FEATURES:
+            quote_y = height - 600
+            frame_cv = render_quote(
+                frame_cv,
+                dc.review_quote,
+                dc.review_author,
+                progress,
+                (width // 2 - 300, quote_y),
+                animation="typewriter"
+            )
+
+        # CTA Button - show in CTA scene
+        if scene.type == SceneType.CTA:
+            cta_y = height - 300
+            frame_cv = render_cta(
+                frame_cv,
+                dc.cta_text,
+                progress,
+                (width // 2 - 120, cta_y),
+                style=dc.cta_style,
+                color=dc.cta_color
+            )
+
+        # Convert back to PIL
+        result = Image.fromarray(cv2.cvtColor(frame_cv, cv2.COLOR_BGR2RGB))
+
+        # Preserve alpha channel if original had one
+        if frame.mode == 'RGBA':
+            result = result.convert('RGBA')
+
+        return result
 
     def _add_scene_effects_pro(self, frame: Image.Image, scene: Scene,
                                progress: float, frame_num: int) -> Image.Image:

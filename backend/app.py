@@ -19,12 +19,34 @@ from dotenv import load_dotenv
 from scraper import scrape_product_data
 from ai_service import (
     generate_ad_script,
+    generate_ad_script_v2,
     generate_video_metadata,
     generate_hook_variations,
+    generate_ab_hooks_enhanced,
     analyze_product_sentiment,
+    get_industry_config,
+    get_platform_config,
+    INDUSTRY_PROMPTS,
+    PLATFORM_COPY_GUIDELINES,
     AIServiceError
 )
-from advanced_video_generator import generate_advanced_video, AdvancedVideoGenerator, VideoConfig
+from advanced_video_generator import generate_advanced_video, AdvancedVideoGenerator, VideoConfig, DynamicContentConfig
+from dynamic_content import (
+    DynamicContentRenderer, PriceDisplay, CountdownTimer,
+    StarRating, ReviewQuote, CTAButton
+)
+from industry_templates import (
+    IndustryTemplateRenderer, INDUSTRY_TEMPLATES, COLOR_SCHEMES,
+    list_templates, list_industries
+)
+from image_processor import ImageProcessor, process_product_image
+from brand_kit import BrandKit, BrandKitManager, apply_brand_kit_to_frame
+from audio_engine import AudioEngine, AudioSettings, generate_video_with_audio
+from platform_variants import (
+    PLATFORM_CONFIGS, get_all_platforms, get_platform_config as get_variant_platform_config,
+    VariantGenerator, generate_platform_variants
+)
+from hooks_database import HooksManager, get_emotional_triggers, get_platform_guidelines
 
 
 load_dotenv()
@@ -1410,6 +1432,349 @@ def supported_platforms():
             }
         ]
     }), 200
+
+
+# ============= NEW FEATURE ENDPOINTS =============
+
+@app.route('/api/process-image', methods=['POST'])
+def process_image():
+    """Process product image with various operations."""
+    try:
+        data = request.get_json()
+        image_url = data.get('image_url')
+        operations = data.get('operations', {})
+
+        if not image_url:
+            return jsonify({'error': 'image_url required'}), 400
+
+        # Process image
+        processed = process_product_image(image_url, operations)
+
+        if processed is None:
+            return jsonify({'error': 'Failed to process image'}), 500
+
+        # Save processed image temporarily
+        job_id = f"img_{uuid.uuid4().hex[:8]}"
+        output_path = f"static/processed/{job_id}.png"
+        os.makedirs("static/processed", exist_ok=True)
+        processed.save(output_path, "PNG")
+
+        return jsonify({
+            'success': True,
+            'processed_image_url': f"/static/processed/{job_id}.png",
+            'operations_applied': list(operations.keys())
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Image processing error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/video-platforms', methods=['GET'])
+def get_video_platforms():
+    """Get list of supported social media platforms for video export."""
+    return jsonify({
+        'success': True,
+        'platforms': get_all_platforms()
+    }), 200
+
+
+@app.route('/api/generate-variants', methods=['POST'])
+def generate_variants():
+    """Generate video variants for multiple platforms."""
+    try:
+        data = request.get_json()
+        job_id = data.get('job_id')
+        platforms = data.get('platforms', [])
+
+        if not job_id:
+            return jsonify({'error': 'job_id required'}), 400
+
+        if not platforms:
+            return jsonify({'error': 'platforms list required'}), 400
+
+        # Get base video path
+        base_video = f"static/videos/{job_id}.mp4"
+        if not os.path.exists(base_video):
+            return jsonify({'error': 'Base video not found'}), 404
+
+        # Generate variants
+        batch = generate_platform_variants(
+            base_video,
+            job_id,
+            platforms,
+            "static/videos"
+        )
+
+        return jsonify({
+            'success': True,
+            'batch_id': batch.batch_id,
+            'status': batch.status,
+            'results': batch.results,
+            'errors': batch.errors
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Variant generation error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/audio-tracks', methods=['GET'])
+def get_audio_tracks():
+    """Get available audio tracks."""
+    try:
+        engine = AudioEngine()
+        style = request.args.get('style')
+
+        tracks = engine.get_available_tracks(style)
+        sfx = engine.get_available_sfx()
+
+        return jsonify({
+            'success': True,
+            'music_tracks': tracks,
+            'sound_effects': sfx
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Audio tracks error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/generate-hooks-ab', methods=['POST'])
+def generate_hooks_ab():
+    """Generate A/B testable hooks."""
+    try:
+        data = request.get_json()
+        product = data.get('product', {})
+        strategies = data.get('strategies')
+        count = data.get('count', 5)
+        platform = data.get('platform')
+        industry = data.get('industry', 'ecommerce')
+
+        if not product.get('title'):
+            return jsonify({'error': 'product with title required'}), 400
+
+        # Try AI-generated hooks first
+        hooks = generate_ab_hooks_enhanced(product, strategies, count, platform, industry)
+
+        # Supplement with template-based hooks if needed
+        if len(hooks) < count:
+            manager = HooksManager()
+            template_hooks = manager.generate_ab_hooks(product, strategies, count - len(hooks), platform)
+            hooks.extend(template_hooks)
+
+        return jsonify({
+            'success': True,
+            'hooks': hooks[:count]
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Hooks generation error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/industries', methods=['GET'])
+def get_industries():
+    """Get available industry types."""
+    return jsonify({
+        'success': True,
+        'industries': [
+            {'id': key, 'name': key.replace('_', ' ').title(), 'config': value}
+            for key, value in INDUSTRY_PROMPTS.items()
+        ]
+    }), 200
+
+
+@app.route('/api/copy-platforms', methods=['GET'])
+def get_copy_platforms():
+    """Get platform-specific copy guidelines."""
+    return jsonify({
+        'success': True,
+        'platforms': [
+            {'id': key, 'name': key.title(), 'guidelines': value}
+            for key, value in PLATFORM_COPY_GUIDELINES.items()
+        ]
+    }), 200
+
+
+@app.route('/api/generate-content-v2', methods=['POST'])
+def generate_content_v2():
+    """Enhanced content generation with industry and platform optimization."""
+    try:
+        data = request.get_json()
+        job_id = data.get('job_id', f"job_{int(time.time() * 1000)}")
+        product = data.get('product', {})
+        style = data.get('style', 'energetic')
+        duration = data.get('duration', 30)
+        industry = data.get('industry', 'ecommerce')
+        platform = data.get('platform')
+        emotional_triggers = data.get('emotional_triggers', [])
+        brand_kit_data = data.get('brand_kit')
+        audio_settings = data.get('audio_settings')
+
+        # New dynamic content parameters
+        dynamic_content_data = data.get('dynamic_content', {})
+        industry_template = data.get('industry_template')
+
+        # Advanced video effects
+        enable_lens_flare = data.get('enable_lens_flare', False)
+        enable_glitch_effects = data.get('enable_glitch_effects', False)
+        glitch_intensity = data.get('glitch_intensity', 0.5)
+
+        if not product.get('title'):
+            return jsonify({'error': 'Product title required'}), 400
+
+        # Generate enhanced script
+        script = generate_ad_script_v2(
+            product, style, duration, industry, platform, emotional_triggers
+        )
+
+        # Build dynamic content config if provided
+        dynamic_content_config = None
+        if dynamic_content_data:
+            pricing = dynamic_content_data.get('pricing', {})
+            countdown = dynamic_content_data.get('countdown', {})
+            rating = dynamic_content_data.get('rating', {})
+            review = dynamic_content_data.get('review', {})
+            cta = dynamic_content_data.get('cta', {})
+
+            dynamic_content_config = {
+                'show_price': pricing.get('enabled', False),
+                'original_price': pricing.get('original'),
+                'sale_price': pricing.get('sale'),
+                'price_animation': pricing.get('animation', 'drop'),
+                'show_countdown': countdown.get('enabled', False),
+                'countdown_seconds': countdown.get('hours', 24) * 3600 if countdown.get('hours') else countdown.get('seconds', 86400),
+                'countdown_style': countdown.get('style', 'flip'),
+                'show_rating': rating.get('enabled', False),
+                'rating': rating.get('value', 4.8),
+                'review_count': rating.get('count'),
+                'show_review': review.get('enabled', False),
+                'review_quote': review.get('quote'),
+                'review_author': review.get('author'),
+                'cta_text': cta.get('text', 'Shop Now'),
+                'cta_style': cta.get('style', 'pulse'),
+                'cta_color': tuple(cta.get('color', [255, 87, 51]))
+            }
+
+        # Store job data
+        job_data = {
+            'job_id': job_id,
+            'title': product.get('title'),
+            'price': product.get('price'),
+            'description': product.get('description', ''),
+            'features': product.get('features', []),
+            'images': product.get('images', []),
+            'script': script,
+            'style': style,
+            'duration': duration,
+            'industry': industry,
+            'platform': platform,
+            'emotional_triggers': emotional_triggers,
+            'brand_kit': brand_kit_data,
+            'audio_settings': audio_settings,
+            'dynamic_content': dynamic_content_config,
+            'industry_template': industry_template,
+            'enable_lens_flare': enable_lens_flare,
+            'enable_glitch_effects': enable_glitch_effects,
+            'glitch_intensity': glitch_intensity,
+            'generated_at': time.time()
+        }
+
+        # Save job data
+        os.makedirs('data/jobs', exist_ok=True)
+        with open(f'data/jobs/{job_id}.json', 'w') as f:
+            json.dump(job_data, f, indent=2)
+
+        return jsonify({
+            'success': True,
+            'job_id': job_id,
+            'script': script,
+            'style': style,
+            'duration': duration,
+            'industry': industry,
+            'platform': platform,
+            'has_dynamic_content': dynamic_content_config is not None,
+            'industry_template': industry_template
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Content generation v2 error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/industry-templates', methods=['GET'])
+def get_industry_templates():
+    """Get available industry templates."""
+    try:
+        industry = request.args.get('industry')
+
+        if industry:
+            # Get templates for specific industry
+            if industry in INDUSTRY_TEMPLATES:
+                templates = []
+                for template_id, template_config in INDUSTRY_TEMPLATES[industry].items():
+                    templates.append({
+                        'id': template_id,
+                        'name': template_config.name,
+                        'description': template_config.description,
+                        'scene_count': len(template_config.scenes),
+                        'color_scheme': template_config.color_scheme,
+                        'recommended_duration': template_config.recommended_duration
+                    })
+                return jsonify({
+                    'success': True,
+                    'industry': industry,
+                    'templates': templates
+                }), 200
+            else:
+                return jsonify({'error': f'Industry "{industry}" not found'}), 404
+        else:
+            # Get all industries with their templates
+            all_templates = {}
+            for ind, templates in INDUSTRY_TEMPLATES.items():
+                all_templates[ind] = []
+                for template_id, template_config in templates.items():
+                    all_templates[ind].append({
+                        'id': template_id,
+                        'name': template_config.name,
+                        'description': template_config.description
+                    })
+
+            return jsonify({
+                'success': True,
+                'industries': list(INDUSTRY_TEMPLATES.keys()),
+                'templates': all_templates
+            }), 200
+
+    except Exception as e:
+        logger.error(f"Industry templates error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/color-schemes', methods=['GET'])
+def get_color_schemes():
+    """Get available color schemes for video generation."""
+    try:
+        schemes = []
+        for scheme_id, scheme_config in COLOR_SCHEMES.items():
+            schemes.append({
+                'id': scheme_id,
+                'name': scheme_id.replace('_', ' ').title(),
+                'primary': list(scheme_config.get('primary', (255, 255, 255))),
+                'secondary': list(scheme_config.get('secondary', (200, 200, 200))),
+                'accent': list(scheme_config.get('accent', (255, 87, 51))),
+                'background': list(scheme_config.get('background', (0, 0, 0)))
+            })
+
+        return jsonify({
+            'success': True,
+            'color_schemes': schemes
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Color schemes error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 
 @app.errorhandler(404)
 def not_found(error):

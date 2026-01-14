@@ -20,6 +20,104 @@ RETRY_DELAY = 1
 DEFAULT_MODEL = "gpt-4o-mini"  # More cost-effective for most use cases
 PREMIUM_MODEL = "gpt-4o"      # For complex requests
 
+# Industry-specific prompt configurations
+INDUSTRY_PROMPTS = {
+    "ecommerce": {
+        "tone": "exciting, benefit-focused, urgency-driven",
+        "cta_style": "Shop Now, Add to Cart, Get Yours Today",
+        "emotional_focus": "desire, FOMO, instant gratification",
+        "hooks": ["problem-solution", "curiosity", "social-proof"],
+        "power_words": ["exclusive", "limited", "bestselling", "trending", "must-have"]
+    },
+    "saas": {
+        "tone": "professional, solution-oriented, ROI-focused",
+        "cta_style": "Start Free Trial, Book Demo, Get Started Free",
+        "emotional_focus": "efficiency, growth, competitive advantage",
+        "hooks": ["pain-point", "statistics", "transformation"],
+        "power_words": ["automate", "streamline", "scale", "boost", "optimize"]
+    },
+    "services": {
+        "tone": "trustworthy, expert, results-driven",
+        "cta_style": "Book Now, Get Quote, Schedule Consultation",
+        "emotional_focus": "trust, expertise, peace of mind",
+        "hooks": ["testimonial", "expertise", "guarantee"],
+        "power_words": ["certified", "guaranteed", "proven", "expert", "trusted"]
+    },
+    "local_business": {
+        "tone": "friendly, community-focused, personal",
+        "cta_style": "Visit Us Today, Call Now, Book Appointment",
+        "emotional_focus": "community, convenience, personal touch",
+        "hooks": ["local-pride", "personal-story", "special-offer"],
+        "power_words": ["local", "family-owned", "neighborhood", "community", "nearby"]
+    },
+    "health": {
+        "tone": "caring, science-backed, transformative",
+        "cta_style": "Start Your Journey, Try Risk-Free, Get Healthier",
+        "emotional_focus": "transformation, wellness, self-care",
+        "hooks": ["transformation", "natural", "results"],
+        "power_words": ["natural", "clinically-proven", "doctor-recommended", "pure", "vital"]
+    },
+    "finance": {
+        "tone": "confident, trustworthy, empowering",
+        "cta_style": "Get Started, Calculate Savings, Secure Your Future",
+        "emotional_focus": "security, growth, financial freedom",
+        "hooks": ["statistics", "transformation", "fear-prevention"],
+        "power_words": ["secure", "grow", "save", "protect", "invest"]
+    }
+}
+
+# Platform-specific copy guidelines
+PLATFORM_COPY_GUIDELINES = {
+    "tiktok": {
+        "max_hook_words": 8,
+        "max_total_words": 50,
+        "tone": "casual, trendy, authentic, Gen-Z friendly",
+        "emoji_usage": "high",
+        "cta_style": "short action verbs (Link in bio, Try it, Get yours)",
+        "avoid": ["formal language", "long sentences", "corporate speak"]
+    },
+    "instagram": {
+        "max_hook_words": 12,
+        "max_total_words": 75,
+        "tone": "aspirational, visual-focused, lifestyle",
+        "emoji_usage": "medium",
+        "cta_style": "lifestyle-oriented (Transform your routine, Elevate your style)",
+        "avoid": ["overly salesy", "clickbait"]
+    },
+    "youtube": {
+        "max_hook_words": 15,
+        "max_total_words": 150,
+        "tone": "educational, engaging, detailed",
+        "emoji_usage": "low",
+        "cta_style": "subscribe, like, learn more",
+        "avoid": ["rushing", "skipping details"]
+    },
+    "linkedin": {
+        "max_hook_words": 15,
+        "max_total_words": 100,
+        "tone": "professional, data-driven, insightful",
+        "emoji_usage": "minimal",
+        "cta_style": "business-value focused (Boost ROI, Scale operations)",
+        "avoid": ["casual slang", "excessive emojis", "entertainment focus"]
+    },
+    "facebook": {
+        "max_hook_words": 12,
+        "max_total_words": 80,
+        "tone": "friendly, community-focused, relatable",
+        "emoji_usage": "medium",
+        "cta_style": "clear action (Shop Now, Learn More, Sign Up)",
+        "avoid": ["youth slang", "overly trendy"]
+    },
+    "twitter": {
+        "max_hook_words": 10,
+        "max_total_words": 60,
+        "tone": "witty, concise, conversational",
+        "emoji_usage": "medium",
+        "cta_style": "click, engage, share",
+        "avoid": ["long sentences", "multiple CTAs"]
+    }
+}
+
 class AIServiceError(Exception):
     """Custom exception for AI service errors"""
     pass
@@ -566,11 +664,240 @@ def get_default_sentiment_analysis() -> Dict[str, Any]:
     }
 
 
+def generate_ad_script_v2(
+    product: Dict[str, Any],
+    style: str = "energetic",
+    duration: int = 30,
+    industry: str = "ecommerce",
+    platform: str = None,
+    emotional_triggers: List[str] = None
+) -> Dict[str, Any]:
+    """
+    Enhanced script generation with industry and platform optimization.
+
+    Args:
+        product: Product information dictionary
+        style: Ad style (energetic, professional, casual, luxury)
+        duration: Target duration in seconds
+        industry: Industry type (ecommerce, saas, services, health, finance, local_business)
+        platform: Target platform (tiktok, instagram, youtube, linkedin, facebook, twitter)
+        emotional_triggers: List of emotional triggers to emphasize
+
+    Returns:
+        Enhanced script dictionary with platform-optimized copy
+    """
+    try:
+        # Get industry-specific configuration
+        industry_config = INDUSTRY_PROMPTS.get(industry, INDUSTRY_PROMPTS["ecommerce"])
+
+        # Get platform guidelines if specified
+        platform_config = None
+        if platform:
+            platform_config = PLATFORM_COPY_GUIDELINES.get(platform)
+
+        # Build enhanced prompt with industry and platform context
+        timing = get_timing_breakdown(duration)
+        prompt = build_enhanced_script_prompt(
+            product, style, timing, industry_config, platform_config, emotional_triggers
+        )
+
+        # Generate script
+        script_data = call_openai_with_retry(prompt, "enhanced_script")
+
+        # Add metadata
+        script_data['metadata'] = {
+            'product_title': product.get('title'),
+            'style': style,
+            'duration': duration,
+            'industry': industry,
+            'platform': platform,
+            'emotional_triggers': emotional_triggers or [],
+            'generated_at': time.time()
+        }
+
+        logger.info(f"Generated enhanced script for {industry} / {platform or 'general'}")
+        return script_data
+
+    except Exception as e:
+        logger.error(f"Enhanced script generation failed: {e}")
+        # Fallback to basic script generation
+        return generate_ad_script(product, style, duration)
+
+
+def build_enhanced_script_prompt(
+    product: Dict[str, Any],
+    style: str,
+    timing: Dict[str, int],
+    industry_config: Dict[str, Any],
+    platform_config: Optional[Dict[str, Any]],
+    emotional_triggers: Optional[List[str]]
+) -> str:
+    """Build enhanced prompt with industry and platform specifics."""
+
+    features_text = format_features(product.get('features', []))
+    category = classify_product_category(product)
+
+    # Platform-specific constraints
+    word_limit = ""
+    platform_guidance = ""
+    if platform_config:
+        word_limit = f"""
+    WORD LIMITS (CRITICAL):
+    - Hook: Maximum {platform_config['max_hook_words']} words
+    - Total script: Maximum {platform_config['max_total_words']} words
+    """
+        platform_guidance = f"""
+    PLATFORM OPTIMIZATION:
+    - Tone: {platform_config['tone']}
+    - CTA Style: {platform_config['cta_style']}
+    - Emoji usage: {platform_config['emoji_usage']}
+    - AVOID: {', '.join(platform_config.get('avoid', []))}
+    """
+
+    # Emotional triggers
+    triggers_text = ""
+    if emotional_triggers:
+        triggers_text = f"""
+    EMOTIONAL TRIGGERS TO EMPHASIZE:
+    - {', '.join(emotional_triggers)}
+    """
+
+    return f"""
+    Create a {timing['total']}-second video ad script optimized for {industry_config.get('tone', 'engaging')} marketing.
+
+    PRODUCT:
+    Title: {product.get('title')}
+    Description: {product.get('description', 'N/A')}
+    Price: {product.get('price')}
+    Features: {features_text}
+    Category: {category}
+
+    INDUSTRY CONTEXT ({category}):
+    - Tone: {industry_config['tone']}
+    - Emotional focus: {industry_config['emotional_focus']}
+    - CTA examples: {industry_config['cta_style']}
+    - Power words to use: {', '.join(industry_config['power_words'])}
+    {platform_guidance}
+    {word_limit}
+    {triggers_text}
+
+    TIMING:
+    - Hook: {timing['hook']}s (MUST grab attention instantly)
+    - Pitch: {timing['pitch']}s (present the solution)
+    - Features: {timing['features']}s (highlight benefits)
+    - CTA: {timing['cta']}s (drive action)
+
+    REQUIREMENTS:
+    1. Hook MUST be punchy and attention-grabbing
+    2. Use industry-appropriate power words
+    3. Include social proof or credibility elements
+    4. Create urgency without being pushy
+    5. CTA should match industry conventions
+
+    Return JSON:
+    {{
+        "hook": "Attention-grabbing opening",
+        "pitch": "Clear value proposition",
+        "features": "Key benefits with proof",
+        "cta": "Compelling call-to-action",
+        "visual_cues": ["Scene descriptions"],
+        "key_messages": ["message1", "message2", "message3"],
+        "ab_hooks": ["Alternative hook 1", "Alternative hook 2", "Alternative hook 3"]
+    }}
+    """
+
+
+def generate_ab_hooks_enhanced(
+    product: Dict[str, Any],
+    strategies: List[str] = None,
+    count: int = 5,
+    platform: str = None,
+    industry: str = "ecommerce"
+) -> List[Dict[str, Any]]:
+    """
+    Generate A/B testable hooks with strategy labels and predicted scores.
+
+    Args:
+        product: Product information
+        strategies: Hook strategies to use
+        count: Number of hooks to generate
+        platform: Target platform
+        industry: Industry type
+
+    Returns:
+        List of hook dicts with text, strategy, and predicted_score
+    """
+    if strategies is None:
+        strategies = ["question", "social_proof", "curiosity", "urgency", "transformation"]
+
+    try:
+        # Get configurations
+        industry_config = INDUSTRY_PROMPTS.get(industry, INDUSTRY_PROMPTS["ecommerce"])
+        platform_config = PLATFORM_COPY_GUIDELINES.get(platform) if platform else None
+
+        max_words = platform_config['max_hook_words'] if platform_config else 12
+
+        prompt = f"""
+        Generate {count} unique, high-converting hooks for this product.
+
+        Product: {product.get('title')}
+        Price: {product.get('price')}
+        Key benefit: {get_main_benefit(product)}
+
+        Industry: {industry}
+        Platform: {platform or 'general'}
+        Max words per hook: {max_words}
+
+        Strategies to use: {', '.join(strategies)}
+        Power words: {', '.join(industry_config['power_words'])}
+
+        Return JSON array with EXACTLY this format:
+        [
+            {{"text": "hook text", "strategy": "strategy_name", "predicted_score": 0.85}},
+            ...
+        ]
+
+        Score based on:
+        - Clarity (0-0.3)
+        - Emotional impact (0-0.3)
+        - Platform fit (0-0.2)
+        - Uniqueness (0-0.2)
+        """
+
+        response = call_openai_with_retry(prompt, "ab_hooks", model=DEFAULT_MODEL)
+
+        if isinstance(response, list):
+            return response[:count]
+        else:
+            logger.warning("Unexpected AB hooks response format")
+            return [{"text": f"Discover {product.get('title', 'this product')}!", "strategy": "general", "predicted_score": 0.7}]
+
+    except Exception as e:
+        logger.error(f"AB hooks generation failed: {e}")
+        return [{"text": f"Check out {product.get('title', 'this')}!", "strategy": "general", "predicted_score": 0.6}]
+
+
+def get_industry_config(industry: str) -> Dict[str, Any]:
+    """Get industry configuration."""
+    return INDUSTRY_PROMPTS.get(industry, INDUSTRY_PROMPTS["ecommerce"])
+
+
+def get_platform_config(platform: str) -> Optional[Dict[str, Any]]:
+    """Get platform configuration."""
+    return PLATFORM_COPY_GUIDELINES.get(platform)
+
+
 # Export functions for use in main application
 __all__ = [
     'generate_ad_script',
-    'generate_video_metadata', 
+    'generate_ad_script_v2',
+    'generate_video_metadata',
     'generate_hook_variations',
+    'generate_ab_hooks_enhanced',
     'analyze_product_sentiment',
+    'get_industry_config',
+    'get_platform_config',
+    'INDUSTRY_PROMPTS',
+    'PLATFORM_COPY_GUIDELINES',
     'AIServiceError'
 ]

@@ -1,6 +1,10 @@
-import { Dispatch, SetStateAction, useState } from 'react';
-import { Card, Button, Spinner, Form, Row, Col, ButtonGroup } from 'react-bootstrap';
+import { Dispatch, SetStateAction, useState, useEffect } from 'react';
+import { Card, Button, Spinner, Form, Row, Col, Accordion, Badge } from 'react-bootstrap';
 import { motion } from 'framer-motion';
+import BrandKitForm from './BrandKitForm';
+import AudioSettings from './AudioSettings';
+import PlatformSelector from './PlatformSelector';
+import DynamicContentOptions, { DynamicContentConfig } from './DynamicContentOptions';
 
 type Product = {
   title: string;
@@ -16,18 +20,107 @@ type Props = {
   setError: Dispatch<SetStateAction<string>>;
 };
 
+type BrandKit = {
+  logo_url: string;
+  primary_color: string;
+  secondary_color: string;
+  accent_color: string;
+  logo_position: string;
+  watermark_opacity: number;
+};
+
+type AudioSettingsType = {
+  music_style: string;
+  sfx_enabled: boolean;
+  beat_sync: boolean;
+  music_volume: number;
+  sfx_volume: number;
+};
+
 export default function GenerateAd({ product, setJobId, setError }: Props) {
   const [generating, setGenerating] = useState(false);
   const [style, setStyle] = useState('energetic');
   const [duration, setDuration] = useState(30);
+  const [industry, setIndustry] = useState('ecommerce');
+  const [targetPlatform, setTargetPlatform] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([]);
+  const [brandKit, setBrandKit] = useState<BrandKit>({
+    logo_url: '',
+    primary_color: '#0066FF',
+    secondary_color: '#1A1A1A',
+    accent_color: '#FFD700',
+    logo_position: 'bottom_right',
+    watermark_opacity: 0.8,
+  });
+  const [audioSettings, setAudioSettings] = useState<AudioSettingsType>({
+    music_style: 'auto',
+    sfx_enabled: true,
+    beat_sync: true,
+    music_volume: 0.7,
+    sfx_volume: 0.8,
+  });
+  const [dynamicContent, setDynamicContent] = useState<DynamicContentConfig>({
+    pricing: {
+      enabled: false,
+      original: '',
+      sale: '',
+      animation: 'drop',
+    },
+    countdown: {
+      enabled: false,
+      hours: 24,
+      style: 'flip',
+    },
+    rating: {
+      enabled: false,
+      value: 4.8,
+      count: null,
+    },
+    review: {
+      enabled: false,
+      quote: '',
+      author: '',
+    },
+    cta: {
+      text: 'Shop Now',
+      style: 'pulse',
+      color: [255, 87, 51],
+    },
+  });
+  const [industryTemplate, setIndustryTemplate] = useState('');
+  const [availableTemplates, setAvailableTemplates] = useState<any[]>([]);
+  const [enableLensFlare, setEnableLensFlare] = useState(false);
+  const [enableGlitchEffects, setEnableGlitchEffects] = useState(false);
+
+  // Fetch templates when industry changes
+  useEffect(() => {
+    if (industry) {
+      fetch(`http://localhost:5000/api/industry-templates?industry=${industry}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            setAvailableTemplates(data.templates || []);
+          }
+        })
+        .catch(err => console.error('Failed to fetch templates:', err));
+    }
+  }, [industry]);
 
   const handleGenerate = async () => {
     setGenerating(true);
     setError('');
-    
+
     try {
       const jobId = `job_${Date.now()}`;
-      const res = await fetch('http://localhost:5000/api/generate-content', {
+
+      // Build dynamic content payload
+      const hasDynamicContent = dynamicContent.pricing.enabled ||
+        dynamicContent.countdown.enabled ||
+        dynamicContent.rating.enabled ||
+        dynamicContent.review.enabled;
+
+      const res = await fetch('http://localhost:5000/api/generate-content-v2', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -35,8 +128,19 @@ export default function GenerateAd({ product, setJobId, setError }: Props) {
           product,
           style,
           duration,
+          industry,
+          platform: targetPlatform || 'general',
+          emotional_triggers: ['benefit', 'curiosity'],
+          brand_kit: brandKit.logo_url ? brandKit : null,
+          audio_settings: audioSettings,
+          export_platforms: selectedPlatforms,
           include_metadata: true,
-          include_variations: false
+          include_variations: false,
+          // New parameters
+          dynamic_content: hasDynamicContent ? dynamicContent : null,
+          industry_template: industryTemplate || null,
+          enable_lens_flare: enableLensFlare,
+          enable_glitch_effects: enableGlitchEffects,
         })
       });
 
@@ -69,6 +173,24 @@ export default function GenerateAd({ product, setJobId, setError }: Props) {
     { value: 15, label: '15s', description: 'Quick & Punchy', recommended: false },
     { value: 30, label: '30s', description: 'Perfect Balance', recommended: true },
     { value: 60, label: '60s', description: 'Detailed Story', recommended: false }
+  ];
+
+  const industryOptions = [
+    { value: 'ecommerce', label: 'E-commerce', icon: '🛒' },
+    { value: 'saas', label: 'SaaS / Tech', icon: '💻' },
+    { value: 'services', label: 'Services', icon: '🔧' },
+    { value: 'local_business', label: 'Local Business', icon: '🏪' },
+    { value: 'health', label: 'Health & Wellness', icon: '💪' },
+    { value: 'finance', label: 'Finance', icon: '💰' }
+  ];
+
+  const platformOptions = [
+    { value: '', label: 'General', icon: '🎬' },
+    { value: 'tiktok', label: 'TikTok', icon: '📱' },
+    { value: 'instagram', label: 'Instagram', icon: '📸' },
+    { value: 'youtube', label: 'YouTube', icon: '▶️' },
+    { value: 'linkedin', label: 'LinkedIn', icon: '💼' },
+    { value: 'facebook', label: 'Facebook', icon: '👥' }
   ];
 
   return (
@@ -331,7 +453,192 @@ export default function GenerateAd({ product, setJobId, setError }: Props) {
                   </div>
                 ))}
               </div>
-              
+
+              {/* Industry & Platform Selection */}
+              <Row className="mb-4">
+                <Col md={6}>
+                  <h6 className="section-title">
+                    <i className="bi bi-building section-icon"></i>
+                    Industry
+                  </h6>
+                  <Form.Select
+                    value={industry}
+                    onChange={(e) => setIndustry(e.target.value)}
+                    className="mb-2"
+                  >
+                    {industryOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.icon} {opt.label}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Col>
+                <Col md={6}>
+                  <h6 className="section-title">
+                    <i className="bi bi-phone section-icon"></i>
+                    Target Platform
+                  </h6>
+                  <Form.Select
+                    value={targetPlatform}
+                    onChange={(e) => setTargetPlatform(e.target.value)}
+                    className="mb-2"
+                  >
+                    {platformOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.icon} {opt.label}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Col>
+              </Row>
+
+              {/* Industry Template Selection */}
+              {availableTemplates.length > 0 && (
+                <div className="mb-4">
+                  <h6 className="section-title">
+                    <i className="bi bi-grid-3x3-gap section-icon"></i>
+                    Video Template
+                    <Badge bg="success" className="ms-2" style={{ fontSize: '0.65rem' }}>Pro</Badge>
+                  </h6>
+                  <Row>
+                    <Col xs={12} className="mb-2">
+                      <div
+                        className={`duration-option ${!industryTemplate ? 'selected' : ''}`}
+                        onClick={() => setIndustryTemplate('')}
+                      >
+                        <div className="d-flex justify-content-between align-items-center">
+                          <div>
+                            <div className="duration-label">Auto (AI Generated)</div>
+                            <div className="duration-description">Let AI choose the best template</div>
+                          </div>
+                          <i className={`bi bi-${!industryTemplate ? 'check-circle-fill' : 'circle'}`}></i>
+                        </div>
+                      </div>
+                    </Col>
+                    {availableTemplates.map((template) => (
+                      <Col xs={12} key={template.id} className="mb-2">
+                        <div
+                          className={`duration-option ${industryTemplate === template.id ? 'selected' : ''}`}
+                          onClick={() => setIndustryTemplate(template.id)}
+                        >
+                          <div className="d-flex justify-content-between align-items-center">
+                            <div>
+                              <div className="duration-label">{template.name}</div>
+                              <div className="duration-description">{template.description}</div>
+                            </div>
+                            <i className={`bi bi-${industryTemplate === template.id ? 'check-circle-fill' : 'circle'}`}></i>
+                          </div>
+                        </div>
+                      </Col>
+                    ))}
+                  </Row>
+                </div>
+              )}
+
+              {/* Advanced Options Toggle */}
+              <div className="mb-3">
+                <Button
+                  variant="outline-secondary"
+                  size="sm"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="w-100"
+                >
+                  <i className={`bi bi-chevron-${showAdvanced ? 'up' : 'down'} me-2`}></i>
+                  {showAdvanced ? 'Hide' : 'Show'} Advanced Options
+                </Button>
+              </div>
+
+              {/* Advanced Options */}
+              {showAdvanced && (
+                <Accordion defaultActiveKey="" className="mb-4">
+                  <Accordion.Item eventKey="0">
+                    <Accordion.Header>
+                      <i className="bi bi-stars me-2 text-warning"></i>
+                      Dynamic Content
+                      <Badge bg="success" className="ms-2">Pro</Badge>
+                    </Accordion.Header>
+                    <Accordion.Body className="p-0">
+                      <DynamicContentOptions
+                        config={dynamicContent}
+                        onChange={setDynamicContent}
+                      />
+                    </Accordion.Body>
+                  </Accordion.Item>
+                  <Accordion.Item eventKey="1">
+                    <Accordion.Header>
+                      <i className="bi bi-film me-2 text-info"></i>
+                      Video Effects
+                    </Accordion.Header>
+                    <Accordion.Body>
+                      <div className="mb-3">
+                        <Form.Check
+                          type="switch"
+                          id="lens-flare-toggle"
+                          label={
+                            <span>
+                              <i className="bi bi-brightness-high me-2"></i>
+                              Lens Flare Effect
+                              <small className="text-muted ms-2">Cinematic light effects</small>
+                            </span>
+                          }
+                          checked={enableLensFlare}
+                          onChange={(e) => setEnableLensFlare(e.target.checked)}
+                        />
+                      </div>
+                      <div>
+                        <Form.Check
+                          type="switch"
+                          id="glitch-toggle"
+                          label={
+                            <span>
+                              <i className="bi bi-lightning me-2"></i>
+                              Glitch Effects
+                              <small className="text-muted ms-2">Trendy digital distortion</small>
+                            </span>
+                          }
+                          checked={enableGlitchEffects}
+                          onChange={(e) => setEnableGlitchEffects(e.target.checked)}
+                        />
+                      </div>
+                    </Accordion.Body>
+                  </Accordion.Item>
+                  <Accordion.Item eventKey="2">
+                    <Accordion.Header>
+                      <i className="bi bi-palette me-2"></i>
+                      Brand Kit
+                    </Accordion.Header>
+                    <Accordion.Body className="p-0">
+                      <BrandKitForm brandKit={brandKit} onChange={setBrandKit} />
+                    </Accordion.Body>
+                  </Accordion.Item>
+                  <Accordion.Item eventKey="3">
+                    <Accordion.Header>
+                      <i className="bi bi-music-note-beamed me-2"></i>
+                      Audio Settings
+                    </Accordion.Header>
+                    <Accordion.Body className="p-0">
+                      <AudioSettings
+                        settings={audioSettings}
+                        onChange={setAudioSettings}
+                        currentStyle={style}
+                      />
+                    </Accordion.Body>
+                  </Accordion.Item>
+                  <Accordion.Item eventKey="4">
+                    <Accordion.Header>
+                      <i className="bi bi-share me-2"></i>
+                      Export Platforms
+                    </Accordion.Header>
+                    <Accordion.Body className="p-0">
+                      <PlatformSelector
+                        selectedPlatforms={selectedPlatforms}
+                        onChange={setSelectedPlatforms}
+                      />
+                    </Accordion.Body>
+                  </Accordion.Item>
+                </Accordion>
+              )}
+
               {/* Generate Button */}
               <Button
                 className="generate-button"
