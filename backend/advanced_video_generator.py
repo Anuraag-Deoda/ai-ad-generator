@@ -86,6 +86,46 @@ from industry_templates import (
 from video_effects import LensFlare, GlitchEffect
 from pro_effects import KineticTypography as KineticTypographyPro
 
+# Import advanced modules
+from scene_analyzer import (
+    SceneAnalyzer,
+    SmartSceneComposer,
+    analyze_product_images,
+    get_smart_scene_composition,
+    extract_color_theme
+)
+from motion_graphics import (
+    Easing as AdvancedEasing,
+    EasingType,
+    Transform3DEngine,
+    MorphEngine,
+    LiquidEffect,
+    PathAnimation,
+    ProceduralMotion,
+    apply_3d_transform,
+    transition_morph,
+    apply_liquid_effect
+)
+from color_grading import (
+    ColorGrader,
+    ColorGradePreset,
+    ColorGradeSettings,
+    HDRToneMapper,
+    apply_color_grade,
+    get_available_presets,
+    create_custom_grade
+)
+from particle_system import (
+    ParticleSystem as AdvancedParticleEngine,
+    ParticlePresets,
+    ParticleConfig,
+    EmitterConfig,
+    ParticleShape,
+    BlendMode,
+    create_particle_effect,
+    render_particles
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -147,6 +187,18 @@ class VideoConfig:
     enable_lens_flare: bool = False
     enable_glitch_effects: bool = False
     glitch_intensity: float = 0.5
+
+    # Advanced module settings
+    enable_smart_composition: bool = True  # Use AI scene analysis
+    enable_motion_graphics: bool = True  # Advanced transitions
+    enable_pro_color_grading: bool = True  # Professional color grading
+    enable_advanced_particles: bool = True  # Advanced particle system
+    color_grade_preset: str = "cinematic_teal_orange"  # Color grade preset name
+    color_grade_intensity: float = 0.7  # 0-1 intensity
+    transition_style: str = "dissolve"  # dissolve, wipe, iris, morph
+    liquid_effects: bool = False  # Enable liquid/wave distortions
+    enable_3d_transforms: bool = False  # 3D perspective effects
+    particle_preset: str = "sparkles"  # Particle effect preset
 
 
 class SceneType(Enum):
@@ -258,6 +310,13 @@ class AdvancedVideoGenerator:
         self.product_images: List[Image.Image] = []
         self.fonts = self._load_fonts()
 
+        # Initialize advanced modules
+        self.scene_analyzer = SceneAnalyzer() if self.config.enable_smart_composition else None
+        self.color_grader = ColorGrader() if self.config.enable_pro_color_grading else None
+        self.pro_particle_system = None  # Initialized per-scene
+        self.scene_analyses = []  # Store image analyses
+        self.smart_composition = None  # Store AI-generated composition
+
     def _load_fonts(self) -> Dict[str, ImageFont.FreeTypeFont]:
         """Load fonts with fallbacks"""
         fonts = {}
@@ -333,6 +392,149 @@ class AdvancedVideoGenerator:
         draw.text((350, 380), "PRODUCT", fill=(150, 150, 160, 255), font=self.fonts['body'])
 
         return apply_shadow_to_image(img, offset=(15, 15), blur_radius=20, opacity=0.4)
+
+    def analyze_images(self) -> None:
+        """Analyze product images for smart composition"""
+        if not self.scene_analyzer or not self.product_images:
+            return
+
+        self.scene_analyses = []
+        for img in self.product_images:
+            try:
+                analysis = self.scene_analyzer.analyze_image(img)
+                self.scene_analyses.append(analysis)
+                logger.info(f"Analyzed image: composition={analysis.composition.value}, mood={analysis.mood.value}")
+            except Exception as e:
+                logger.warning(f"Failed to analyze image: {e}")
+                self.scene_analyses.append(None)
+
+    def apply_pro_color_grade(self, frame: Image.Image, scene_progress: float = 0.5) -> Image.Image:
+        """Apply professional color grading to frame"""
+        if not self.color_grader or not self.config.enable_pro_color_grading:
+            return frame
+
+        try:
+            preset_name = self.config.color_grade_preset
+            intensity = self.config.color_grade_intensity
+
+            # Try to get preset enum
+            try:
+                preset = ColorGradePreset(preset_name)
+                return self.color_grader.apply_preset(frame, preset, intensity)
+            except ValueError:
+                # Use as custom name
+                return apply_color_grade(frame, preset_name, intensity)
+
+        except Exception as e:
+            logger.warning(f"Color grading failed: {e}")
+            return frame
+
+    def apply_advanced_transition(self, frame1: Image.Image, frame2: Image.Image,
+                                  progress: float, transition_type: str = None) -> Image.Image:
+        """Apply advanced transition between frames"""
+        if not self.config.enable_motion_graphics:
+            # Simple blend fallback
+            return Image.blend(frame1, frame2, progress)
+
+        try:
+            t_type = transition_type or self.config.transition_style
+
+            if t_type == 'dissolve':
+                return MorphEngine.cross_dissolve(frame1, frame2, progress)
+            elif t_type == 'wipe':
+                direction = random.choice(['left', 'right', 'up', 'down'])
+                return MorphEngine.wipe_transition(frame1, frame2, progress, direction)
+            elif t_type == 'iris':
+                return MorphEngine.iris_transition(frame1, frame2, progress)
+            elif t_type == 'pixelate':
+                return MorphEngine.pixelate_transition(frame1, frame2, progress)
+            elif t_type == 'morph':
+                # Use liquid morph for organic transition
+                return LiquidEffect.blob_morph(
+                    Image.blend(frame1, frame2, progress),
+                    progress * 0.5,
+                    intensity=0.2
+                )
+            else:
+                return MorphEngine.cross_dissolve(frame1, frame2, progress)
+
+        except Exception as e:
+            logger.warning(f"Advanced transition failed: {e}")
+            return Image.blend(frame1, frame2, progress)
+
+    def apply_liquid_effect_to_frame(self, frame: Image.Image, progress: float,
+                                     effect_type: str = 'wave') -> Image.Image:
+        """Apply liquid/wave effects to frame"""
+        if not self.config.liquid_effects:
+            return frame
+
+        try:
+            return apply_liquid_effect(frame, progress, effect_type)
+        except Exception as e:
+            logger.warning(f"Liquid effect failed: {e}")
+            return frame
+
+    def apply_3d_transform_to_image(self, img: Image.Image, rx: float = 0,
+                                    ry: float = 0, rz: float = 0) -> Image.Image:
+        """Apply 3D perspective transform to image"""
+        if not self.config.enable_3d_transforms:
+            return img
+
+        try:
+            return apply_3d_transform(img, rx, ry, rz)
+        except Exception as e:
+            logger.warning(f"3D transform failed: {e}")
+            return img
+
+    def get_pro_particle_frame(self, frame: Image.Image, progress: float,
+                               effect_type: str = None) -> Image.Image:
+        """Render advanced particle effects onto frame"""
+        if not self.config.enable_advanced_particles:
+            return frame
+
+        try:
+            preset = effect_type or self.config.particle_preset
+            return render_particles(frame, preset, progress, duration=5.0)
+        except Exception as e:
+            logger.warning(f"Pro particle rendering failed: {e}")
+            return frame
+
+    def get_smart_ken_burns_preset(self, image_index: int) -> str:
+        """Get AI-recommended Ken Burns preset for image"""
+        if not self.scene_analyses or image_index >= len(self.scene_analyses):
+            return 'zoom_in_center'
+
+        analysis = self.scene_analyses[image_index]
+        if analysis and hasattr(analysis, 'recommended_ken_burns'):
+            return analysis.recommended_ken_burns
+
+        return 'zoom_in_center'
+
+    def get_smart_color_scheme(self, image_index: int) -> Dict[str, Tuple[int, int, int]]:
+        """Get AI-extracted color scheme from image"""
+        if not self.scene_analyses or image_index >= len(self.scene_analyses):
+            return {
+                'primary': (255, 255, 255),
+                'secondary': (200, 200, 200),
+                'accent': (255, 87, 51),
+                'background': (0, 0, 0)
+            }
+
+        analysis = self.scene_analyses[image_index]
+        if analysis and hasattr(analysis, 'color_palette'):
+            return {
+                'primary': analysis.color_palette.dominant,
+                'secondary': analysis.color_palette.secondary[0] if analysis.color_palette.secondary else analysis.color_palette.dominant,
+                'accent': analysis.color_palette.accent,
+                'background': analysis.color_palette.background
+            }
+
+        return {
+            'primary': (255, 255, 255),
+            'secondary': (200, 200, 200),
+            'accent': (255, 87, 51),
+            'background': (0, 0, 0)
+        }
 
     def setup_scenes(self, script: Dict, style: str, duration: int) -> None:
         """Configure scenes based on script and style"""
