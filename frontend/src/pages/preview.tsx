@@ -31,6 +31,13 @@ export default function PreviewPage() {
   useEffect(() => {
     if (!job_id) return;
 
+    // Only trigger generation once per job per session
+    const generationKey = `video_generation_started_${job_id}`;
+    if (sessionStorage.getItem(generationKey)) {
+      return;
+    }
+    sessionStorage.setItem(generationKey, 'true');
+
     setVideoGenerating(true);
     fetch('http://localhost:5000/api/generate-video', {
       method: 'POST',

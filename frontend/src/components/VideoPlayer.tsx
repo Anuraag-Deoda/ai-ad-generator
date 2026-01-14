@@ -9,6 +9,7 @@ type Props = {
 export default function VideoPlayer({ jobId }: Props) {
   const [videoError, setVideoError] = useState(false);
   const [videoLoading, setVideoLoading] = useState(true);
+  const [retryCount, setRetryCount] = useState(0);
 
   const handleVideoLoad = () => setVideoLoading(false);
   const handleVideoError = () => {
@@ -16,7 +17,13 @@ export default function VideoPlayer({ jobId }: Props) {
     setVideoError(true);
   };
 
-  const videoUrl = `http://localhost:5000/static/videos/${jobId}.mp4`;
+  const handleRetry = () => {
+    setVideoError(false);
+    setVideoLoading(true);
+    setRetryCount(prev => prev + 1);
+  };
+
+  const videoUrl = `http://localhost:5000/static/videos/${jobId}.mp4?retry=${retryCount}`;
 
   if (videoError) {
     return (
@@ -88,9 +95,9 @@ export default function VideoPlayer({ jobId }: Props) {
               Your video is still being crafted by our AI. This usually takes 1-3 minutes.
               Please wait a moment and refresh to check the status.
             </p>
-            <Button 
+            <Button
               className="refresh-button"
-              onClick={() => window.location.reload()}
+              onClick={handleRetry}
             >
               <i className="bi bi-arrow-clockwise me-2"></i>
               Check Again
