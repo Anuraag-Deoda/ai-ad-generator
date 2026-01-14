@@ -12,47 +12,95 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class AdvancedProductScraper:
+    # Pool of realistic user agents (updated browsers)
+    USER_AGENTS = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:121.0) Gecko/20100101 Firefox/121.0",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    ]
+
     def __init__(self):
         self.session = requests.Session()
+        self._rotate_headers()
+
+    def _rotate_headers(self):
+        """Rotate user agent and headers to avoid detection"""
+        user_agent = random.choice(self.USER_AGENTS)
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.5",
-            "Accept-Encoding": "gzip, deflate",
+            "User-Agent": user_agent,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
             "Connection": "keep-alive",
             "Upgrade-Insecure-Requests": "1",
             "Sec-Fetch-Dest": "document",
             "Sec-Fetch-Mode": "navigate",
             "Sec-Fetch-Site": "none",
-            "Cache-Control": "max-age=0"
+            "Sec-Fetch-User": "?1",
+            "Cache-Control": "max-age=0",
+            "Sec-Ch-Ua": '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"' if "Windows" in user_agent else '"macOS"',
         }
         self.session.headers.update(self.headers)
 
-    def get_page_content(self, url, retries=3):
-        """Get page content with retry logic and random delays"""
+    def get_page_content(self, url, retries=5):
+        """Get page content with retry logic, header rotation, and random delays"""
+        domain = urlparse(url).netloc
+
         for attempt in range(retries):
             try:
-                # Random delay to avoid being blocked
-                time.sleep(random.uniform(1, 3))
-                
-                response = self.session.get(url, timeout=15)
+                # Rotate headers on each attempt
+                self._rotate_headers()
+
+                # Add referer to look more legitimate
+                self.session.headers["Referer"] = f"https://www.google.com/search?q={domain}"
+
+                # Random delay - longer delays for retries
+                delay = random.uniform(2, 4) + (attempt * random.uniform(1, 3))
+                time.sleep(delay)
+
+                # For Amazon, try mobile URL as fallback on later attempts
+                request_url = url
+                if attempt >= 2 and 'amazon' in domain:
+                    # Try mobile version which may have less strict bot detection
+                    request_url = url.replace('www.amazon', 'm.amazon')
+                    logger.info(f"Trying mobile URL: {request_url}")
+
+                response = self.session.get(request_url, timeout=20, allow_redirects=True)
                 response.raise_for_status()
-                
+
                 # Check if we got blocked (common Amazon response)
-                if "robot" in response.text.lower() or "captcha" in response.text.lower():
+                content_lower = response.text.lower()
+                if "robot" in content_lower or "captcha" in content_lower or "automated access" in content_lower:
                     logger.warning(f"Potential bot detection on attempt {attempt + 1}")
+                    # Clear session cookies and create new session
+                    self.session = requests.Session()
                     if attempt < retries - 1:
                         time.sleep(random.uniform(5, 10))
                         continue
-                
+
+                # Additional check for empty/minimal response
+                if len(response.text) < 1000:
+                    logger.warning(f"Suspiciously short response on attempt {attempt + 1}")
+                    if attempt < retries - 1:
+                        continue
+
                 return response.text
-                
+
             except requests.exceptions.RequestException as e:
                 logger.error(f"Request failed on attempt {attempt + 1}: {str(e)}")
+                # Reset session on connection errors
+                self.session = requests.Session()
                 if attempt < retries - 1:
-                    time.sleep(random.uniform(2, 5))
+                    time.sleep(random.uniform(3, 6))
                     continue
-                    
+
         return None
 
     def extract_json_ld(self, soup):
@@ -100,18 +148,45 @@ class AdvancedProductScraper:
                 return match.group(0).strip()
         return text.strip()
 
+    def _extract_asin_from_url(self, url):
+        """Extract ASIN from Amazon URL"""
+        patterns = [
+            r'/dp/([A-Z0-9]{10})',
+            r'/gp/product/([A-Z0-9]{10})',
+            r'/product/([A-Z0-9]{10})',
+            r'asin=([A-Z0-9]{10})',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, url, re.IGNORECASE)
+            if match:
+                return match.group(1).upper()
+        return None
+
     def scrape_amazon_product(self, url):
         """Advanced Amazon product scraping with multiple fallback strategies"""
         try:
+            # Extract ASIN for potential fallback
+            asin = self._extract_asin_from_url(url)
+
             html_content = self.get_page_content(url)
             if not html_content:
-                return {"error": "Failed to fetch Amazon page"}
+                if asin:
+                    return {
+                        "error": "Amazon blocked the request. Please try manually entering product details.",
+                        "asin": asin,
+                        "suggestion": "You can try again in a few minutes or enter the product information manually."
+                    }
+                return {"error": "Failed to fetch Amazon page - please try again later"}
 
             soup = BeautifulSoup(html_content, 'html.parser')
-            
+
             # Check for bot detection
             if soup.find('form', {'action': '/errors/validateCaptcha'}):
-                return {"error": "Amazon blocked the request - try again later"}
+                return {
+                    "error": "Amazon is showing a CAPTCHA. Please try again in a few minutes.",
+                    "asin": asin,
+                    "suggestion": "Amazon's bot protection triggered. Wait 2-3 minutes and try again."
+                }
 
             result = {
                 "platform": "amazon",
@@ -264,7 +339,11 @@ class AdvancedProductScraper:
 
             # Validate we got minimum required data
             if not result["title"] and not result["price"]:
-                return {"error": "Could not extract basic product information from Amazon"}
+                return {
+                    "error": "Could not extract product information. Amazon may have blocked the request.",
+                    "asin": asin,
+                    "suggestion": "Try again in 2-3 minutes, or manually enter the product details."
+                }
 
             # Remove empty fields
             result = {k: v for k, v in result.items() if v}
