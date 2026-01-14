@@ -18,12 +18,13 @@ import subprocess
 from dotenv import load_dotenv
 from scraper import scrape_product_data
 from ai_service import (
-    generate_ad_script, 
-    generate_video_metadata, 
+    generate_ad_script,
+    generate_video_metadata,
     generate_hook_variations,
     analyze_product_sentiment,
     AIServiceError
 )
+from advanced_video_generator import generate_advanced_video, AdvancedVideoGenerator, VideoConfig
 
 
 load_dotenv()
@@ -312,37 +313,78 @@ def get_batch_status(batch_id):
 
 
 
-# Add this new function to replace Remotion video generation
+# Advanced video generation with professional effects
 @app.route('/api/generate-video', methods=['POST'])
 def generate_video():
-    """Generate video using FFmpeg and OpenCV"""
+    """Generate video using advanced effects engine"""
+    try:
+        data = request.get_json()
+        job_id = data.get('job_id')
+        use_advanced = data.get('advanced', True)  # Use advanced by default
+
+        if not job_id:
+            return jsonify({'error': 'job_id required'}), 400
+
+        input_path = f"data/jobs/{job_id}.json"
+        if not os.path.exists(input_path):
+            return jsonify({'error': 'Job not found'}), 404
+
+        with open(input_path, 'r') as f:
+            job_data = json.load(f)
+
+        # Use advanced video generator with professional effects
+        if use_advanced:
+            logger.info(f"Using ADVANCED video generator for job {job_id}")
+            video_path = generate_advanced_video(job_data)
+        else:
+            logger.info(f"Using basic video generator for job {job_id}")
+            video_path = generate_ffmpeg_video(job_data)
+
+        if video_path:
+            return jsonify({
+                "success": True,
+                "video_path": video_path,
+                "job_id": job_id,
+                "advanced": use_advanced
+            }), 200
+        else:
+            return jsonify({'error': 'Video generation failed'}), 500
+
+    except Exception as e:
+        logger.error(f"Error in generate_video: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+# Legacy basic video generation (kept for fallback)
+@app.route('/api/generate-video-basic', methods=['POST'])
+def generate_video_basic():
+    """Generate video using basic FFmpeg (legacy fallback)"""
     try:
         data = request.get_json()
         job_id = data.get('job_id')
         if not job_id:
             return jsonify({'error': 'job_id required'}), 400
- 
+
         input_path = f"data/jobs/{job_id}.json"
         if not os.path.exists(input_path):
             return jsonify({'error': 'Job not found'}), 404
- 
+
         with open(input_path, 'r') as f:
             job_data = json.load(f)
- 
-        # Generate video using FFmpeg
+
         video_path = generate_ffmpeg_video(job_data)
- 
+
         if video_path:
             return jsonify({
-                "success": True, 
+                "success": True,
                 "video_path": video_path,
                 "job_id": job_id
             }), 200
         else:
             return jsonify({'error': 'Video generation failed'}), 500
- 
+
     except Exception as e:
-        logger.error(f"Error in generate_video: {str(e)}")
+        logger.error(f"Error in generate_video_basic: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
  
  
